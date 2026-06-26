@@ -2,8 +2,8 @@ use tauri::{AppHandle, State, Window};
 
 use crate::db::queries;
 use crate::dto::{
-    AppAggregate, FocusSummaryRow, LiveSnapshot, MetricPoint, NetPoint, NetTotals, TitleFocusRow,
-    WindowFocusRow,
+    AppAggregate, FocusSummaryRow, FocusTimeline, LiveSnapshot, MetricPoint, NetPoint, NetTotals,
+    TitleFocusRow, WindowFocusRow,
 };
 use crate::error::Error;
 use crate::settings::TrackingConfig;
@@ -105,6 +105,19 @@ pub fn window_focus_summary(
 ) -> Result<Vec<WindowFocusRow>, Error> {
     let conn = state.db.lock().unwrap();
     queries::window_focus_summary(&conn, from, to, limit.unwrap_or(50))
+}
+
+/// Per-window focus split across time buckets over a range (for the timeline chart).
+#[tauri::command]
+pub fn focus_timeline(
+    state: State<'_, AppState>,
+    from: i64,
+    to: i64,
+    bucket_secs: Option<i64>,
+    limit: Option<i64>,
+) -> Result<FocusTimeline, Error> {
+    let conn = state.db.lock().unwrap();
+    queries::focus_timeline(&conn, from, to, bucket_secs.unwrap_or(600), limit.unwrap_or(30))
 }
 
 #[tauri::command]

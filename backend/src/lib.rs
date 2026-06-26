@@ -36,6 +36,7 @@ pub fn run() {
             commands::focus_summary,
             commands::app_window_focus,
             commands::window_focus_summary,
+            commands::focus_timeline,
             commands::get_tracking_config,
             commands::set_tracking_config,
         ])

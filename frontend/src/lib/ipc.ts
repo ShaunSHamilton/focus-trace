@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AppAggregate,
   FocusSummaryRow,
+  FocusTimeline,
   LiveSnapshot,
   MetricPoint,
   NetPoint,
@@ -46,6 +47,13 @@ export const appWindowFocus = (
 
 export const windowFocusSummary = (from: number, to: number, limit?: number) =>
   invoke<WindowFocusRow[]>("window_focus_summary", { from, to, limit });
+
+export const focusTimeline = (
+  from: number,
+  to: number,
+  bucketSecs?: number,
+  limit?: number,
+) => invoke<FocusTimeline>("focus_timeline", { from, to, bucketSecs, limit });
 
 export const getTrackingConfig = () =>
   invoke<TrackingConfig>("get_tracking_config");

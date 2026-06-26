@@ -1,4 +1,5 @@
 import { Card } from "../components/card";
+import { FocusTimelineCard } from "../components/focus-timeline-card";
 import { Page } from "../components/page";
 import { StatTile } from "../components/stat-tile";
 import { useTelemetry } from "../hooks/use-telemetry";
@@ -91,6 +92,8 @@ export function DashboardView() {
           </tbody>
         </table>
       </Card>
+
+      <FocusTimelineCard />
     </Page>
   );
 }

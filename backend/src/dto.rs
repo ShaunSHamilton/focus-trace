@@ -119,3 +119,34 @@ pub struct WindowFocusRow {
     pub title: String,
     pub focus_secs: i64,
 }
+
+// ── Focus timeline (per-window focus over time, bucketed) ─────────────────────
+
+/// One window/title series in the timeline. `id` is the title id; `0` means
+/// "(no title)" and `-1` is the aggregated "Other" bucket.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusTimelineSeries {
+    pub id: i64,
+    pub app_name: String,
+    pub title: String,
+    pub total_secs: i64,
+}
+
+/// Focus seconds for one time bucket, aligned to the `series` order.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusTimelinePoint {
+    pub ts: i64,
+    pub secs: Vec<i64>,
+}
+
+/// Per-window focus, split across time buckets over a range. The frontend
+/// cumulates `points[*].secs` per series for the cumulative stacked chart.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusTimeline {
+    pub bucket_secs: i64,
+    pub series: Vec<FocusTimelineSeries>,
+    pub points: Vec<FocusTimelinePoint>,
+}

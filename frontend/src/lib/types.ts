@@ -87,6 +87,24 @@ export interface WindowFocusRow {
   focusSecs: number;
 }
 
+export interface FocusTimelineSeries {
+  id: number; // title id; 0 = "(no title)", -1 = "Other"
+  appName: string;
+  title: string;
+  totalSecs: number;
+}
+
+export interface FocusTimelinePoint {
+  ts: number;
+  secs: number[]; // aligned to FocusTimeline.series order
+}
+
+export interface FocusTimeline {
+  bucketSecs: number;
+  series: FocusTimelineSeries[];
+  points: FocusTimelinePoint[];
+}
+
 export interface TrackingConfig {
   ignoreSystemProcesses: boolean;
   pollSecs: number;

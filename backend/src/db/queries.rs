@@ -1,7 +1,8 @@
 //! All SQL lives here. No SQL string should appear outside this module.
 
 use crate::dto::{
-    AppAggregate, FocusSummaryRow, MetricPoint, NetPoint, NetTotals, TitleFocusRow, WindowFocusRow,
+    AppAggregate, FocusSummaryRow, FocusTimeline, FocusTimelinePoint, FocusTimelineSeries,
+    MetricPoint, NetPoint, NetTotals, TitleFocusRow, WindowFocusRow,
 };
 use crate::error::Error;
 use crate::telemetry::Snapshot;
@@ -414,6 +415,124 @@ pub fn window_focus_summary(
         })
     })?;
     collect(rows)
+}
+
+/// Per-window focus split across `bucket`-second time buckets over [from, to].
+/// Each focus session is distributed across the buckets it overlaps (clamped to
+/// the range). Returns the top `limit` windows by total focus plus an aggregated
+/// "Other" series for the remainder.
+pub fn focus_timeline(
+    conn: &Connection,
+    from: i64,
+    to: i64,
+    bucket: i64,
+    limit: i64,
+) -> Result<FocusTimeline, Error> {
+    use std::collections::{HashMap, HashSet};
+
+    let bucket = bucket.max(1);
+    let span = (to - from).max(bucket);
+    let n = (((span + bucket - 1) / bucket) as usize).clamp(1, 5000);
+
+    let mut stmt = conn.prepare(
+        "SELECT f.started_at, f.ended_at, f.title_id, COALESCE(w.title, '(no title)'), a.name
+         FROM focus_sessions f
+         JOIN apps a ON a.id = f.app_id
+         LEFT JOIN window_titles w ON w.id = f.title_id
+         WHERE f.ended_at >= ?1 AND f.started_at <= ?2",
+    )?;
+
+    let mut buckets: HashMap<i64, Vec<i64>> = HashMap::new();
+    let mut totals: HashMap<i64, i64> = HashMap::new();
+    let mut meta: HashMap<i64, (String, String)> = HashMap::new(); // key -> (app, title)
+
+    let rows = stmt.query_map(params![from, to], |r| {
+        Ok((
+            r.get::<_, i64>(0)?,                       // started
+            r.get::<_, i64>(1)?,                       // ended
+            r.get::<_, Option<i64>>(2)?.unwrap_or(0),  // title_id (0 = none)
+            r.get::<_, String>(3)?,                    // title
+            r.get::<_, String>(4)?,                    // app name
+        ))
+    })?;
+
+    for row in rows {
+        let (started, ended, key, title, app) = row?;
+        meta.entry(key).or_insert((app, title));
+        let s = started.max(from);
+        let e = ended.min(to);
+        if e <= s {
+            continue;
+        }
+        let bi_start = ((s - from) / bucket) as usize;
+        let bi_end = (((e - 1 - from) / bucket) as usize).min(n - 1);
+        let arr = buckets.entry(key).or_insert_with(|| vec![0i64; n]);
+        for bi in bi_start..=bi_end {
+            let bstart = from + (bi as i64) * bucket;
+            let bend = bstart + bucket;
+            let overlap = e.min(bend) - s.max(bstart);
+            if overlap > 0 {
+                arr[bi] += overlap;
+                *totals.entry(key).or_insert(0) += overlap;
+            }
+        }
+    }
+
+    // Rank windows by total focus; keep top `limit`, aggregate the rest as Other.
+    let mut keys: Vec<i64> = totals.keys().copied().collect();
+    keys.sort_by(|a, b| totals[b].cmp(&totals[a]));
+    let top: Vec<i64> = keys.iter().copied().take(limit.max(1) as usize).collect();
+    let top_set: HashSet<i64> = top.iter().copied().collect();
+
+    let mut series = Vec::new();
+    for k in &top {
+        let (app, title) = meta.get(k).cloned().unwrap_or_default();
+        series.push(FocusTimelineSeries {
+            id: *k,
+            app_name: app,
+            title,
+            total_secs: totals[k],
+        });
+    }
+
+    let mut other = vec![0i64; n];
+    let mut other_total = 0i64;
+    for k in keys.iter().filter(|k| !top_set.contains(k)) {
+        if let Some(arr) = buckets.get(k) {
+            for (i, v) in arr.iter().enumerate() {
+                other[i] += v;
+            }
+            other_total += totals[k];
+        }
+    }
+    let has_other = other_total > 0;
+    if has_other {
+        series.push(FocusTimelineSeries {
+            id: -1,
+            app_name: String::new(),
+            title: "Other".to_string(),
+            total_secs: other_total,
+        });
+    }
+
+    let mut points = Vec::with_capacity(n);
+    for bi in 0..n {
+        let ts = from + (bi as i64) * bucket;
+        let mut secs: Vec<i64> = top
+            .iter()
+            .map(|k| buckets.get(k).map(|a| a[bi]).unwrap_or(0))
+            .collect();
+        if has_other {
+            secs.push(other[bi]);
+        }
+        points.push(FocusTimelinePoint { ts, secs });
+    }
+
+    Ok(FocusTimeline {
+        bucket_secs: bucket,
+        series,
+        points,
+    })
 }
 
 // ── Retention: roll completed days into dailies, prune old raw samples ────────
