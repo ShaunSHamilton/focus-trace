@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+/* Dark-theme-first palette (carried over from the original scaffold). */
+@theme {
+  --color-bg: #0f0f0f;
+  --color-surface: #161616;
+  --color-border: #262626;
+  --color-fg: #f6f6f6;
+  --color-muted: #a3a3a3;
+  --color-accent: #4f9dff;
+}
+
+:root {
+  color-scheme: dark;
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  overscroll-behavior: none;
+}

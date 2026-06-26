@@ -1,0 +1,46 @@
+[package]
+name = "app-view"
+version = "1.0.0"
+description = "Track and monitor PC applications: focus time, CPU, memory, and network usage."
+authors = ["Shaun Hamilton"]
+edition = "2024"
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "app_view_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+time = "0.3.47"
+# Embedded SQLite. libsql (Turso's SDK) does not build on Windows (libsql-sys 0.5
+# references std::os::unix unconditionally), so we use rusqlite with the bundled
+# SQLite amalgamation — real SQLite, compiles natively on Windows arm64.
+rusqlite = { version = "0.40", features = ["bundled"] }
+sysinfo = "0.39"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",     # GetForegroundWindow, GetWindowThreadProcessId
+    "Win32_NetworkManagement_IpHelper", # GetIfTable2, FreeMibTable, MIB_IF_TABLE2/ROW2
+    "Win32_NetworkManagement_Ndis",     # NET_LUID, IF_TYPE_* / MediaConnectState
+] }
+
+
+[profile.dev]
+incremental = true # Compile your binary in smaller steps.
+
+[profile.release]
+codegen-units = 1 # Allows LLVM to perform better optimization.
+lto = true        # Enables link-time-optimizations.
+opt-level = "s"   # Prioritizes small binary size. Use `3` if you prefer speed.
+panic = "abort"   # Higher performance by disabling panic handlers.
+strip = true      # Ensures debug symbols are removed.
