@@ -22,5 +22,6 @@ pub fn init(path: &Path) -> Result<Connection, Error> {
     conn.execute_batch(schema::PRAGMAS)?;
     schema::migrate(&conn)?;
     queries::seed_config_defaults(&conn)?;
+    queries::seed_default_dashboard(&conn)?;
     Ok(conn)
 }

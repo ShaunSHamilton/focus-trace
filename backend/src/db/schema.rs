@@ -9,7 +9,7 @@ PRAGMA foreign_keys = ON;";
 
 /// Ordered, idempotent migrations. Index + 1 == the `user_version` it sets.
 /// Append new entries; never edit a shipped one.
-pub const MIGRATIONS: &[&str] = &[V1, V2];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3];
 
 const V1: &str = r#"
 -- App identity: the long exe-path string is stored ONCE and referenced by FK.
@@ -110,6 +110,32 @@ CREATE TABLE IF NOT EXISTS window_titles (
 -- Nullable FK; SQLite ADD COLUMN with REFERENCES requires a NULL default.
 ALTER TABLE focus_sessions ADD COLUMN title_id INTEGER REFERENCES window_titles(id);
 CREATE INDEX IF NOT EXISTS idx_focus_title ON focus_sessions(title_id);
+"#;
+
+// Custom dashboards: a dashboard owns a set of panels. A panel binds a data
+// `kind` (frontend registry key) + `chart_type` to a grid cell (x,y,w,h).
+const V3: &str = r#"
+CREATE TABLE IF NOT EXISTS dashboards (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT    NOT NULL,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    sort       INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS panels (
+    id           INTEGER PRIMARY KEY,
+    dashboard_id INTEGER NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+    title        TEXT    NOT NULL,
+    kind         TEXT    NOT NULL,            -- frontend panel-kind key
+    chart_type   TEXT    NOT NULL,            -- area | bar | donut | calendar | gauge
+    args_json    TEXT    NOT NULL DEFAULT '{}',
+    range_key    TEXT    NOT NULL DEFAULT '24h',
+    x            INTEGER NOT NULL DEFAULT 0,
+    y            INTEGER NOT NULL DEFAULT 0,
+    w            INTEGER NOT NULL DEFAULT 6,
+    h            INTEGER NOT NULL DEFAULT 6,
+    sort         INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_panels_dashboard ON panels(dashboard_id);
 "#;
 
 /// Apply any migrations newer than the stored `user_version`.

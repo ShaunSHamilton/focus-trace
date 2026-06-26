@@ -37,6 +37,12 @@ pub fn run() {
             commands::app_window_focus,
             commands::window_focus_summary,
             commands::focus_timeline,
+            commands::focus_by_day,
+            commands::list_dashboards,
+            commands::create_dashboard,
+            commands::rename_dashboard,
+            commands::delete_dashboard,
+            commands::save_panels,
             commands::get_tracking_config,
             commands::set_tracking_config,
         ])

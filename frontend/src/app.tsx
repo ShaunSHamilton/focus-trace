@@ -4,6 +4,7 @@ import type { AppAggregate } from "./lib/types";
 import { AppDetailView } from "./views/app-detail-view";
 import { AppListView } from "./views/app-list-view";
 import { DashboardView } from "./views/dashboard-view";
+import { DashboardsView } from "./views/dashboards-view";
 import { FocusView } from "./views/focus-view";
 import { NetworkView } from "./views/network-view";
 import { SettingsView } from "./views/settings-view";
@@ -20,6 +21,7 @@ export function App() {
   return (
     <AppLayout current={view} onNavigate={navigate}>
       {view === "dashboard" && <DashboardView />}
+      {view === "dashboards" && <DashboardsView />}
       {view === "apps" &&
         (selectedApp ? (
           <AppDetailView app={selectedApp} onBack={() => setSelectedApp(null)} />

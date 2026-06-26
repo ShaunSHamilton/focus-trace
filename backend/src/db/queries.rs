@@ -1,8 +1,9 @@
 //! All SQL lives here. No SQL string should appear outside this module.
 
 use crate::dto::{
-    AppAggregate, FocusSummaryRow, FocusTimeline, FocusTimelinePoint, FocusTimelineSeries,
-    MetricPoint, NetPoint, NetTotals, TitleFocusRow, WindowFocusRow,
+    AppAggregate, Dashboard, DayFocus, FocusSummaryRow, FocusTimeline, FocusTimelinePoint,
+    FocusTimelineSeries, MetricPoint, NetPoint, NetTotals, Panel, PanelInput, TitleFocusRow,
+    WindowFocusRow,
 };
 use crate::error::Error;
 use crate::telemetry::Snapshot;
@@ -533,6 +534,161 @@ pub fn focus_timeline(
         series,
         points,
     })
+}
+
+/// Total focus seconds per UTC day over a range (for the calendar heatmap).
+pub fn focus_by_day(conn: &Connection, from: i64, to: i64) -> Result<Vec<DayFocus>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT (started_at/86400)*86400 AS day, SUM(duration) AS secs
+         FROM focus_sessions
+         WHERE started_at BETWEEN ?1 AND ?2
+         GROUP BY day ORDER BY day",
+    )?;
+    let rows = stmt.query_map(params![from, to], |r| {
+        Ok(DayFocus {
+            day: r.get(0)?,
+            focus_secs: r.get(1)?,
+        })
+    })?;
+    collect(rows)
+}
+
+// ── Custom dashboards ─────────────────────────────────────────────────────────
+
+fn panels_for(conn: &Connection, dashboard_id: i64) -> Result<Vec<Panel>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, dashboard_id, title, kind, chart_type, args_json, range_key, x, y, w, h, sort
+         FROM panels WHERE dashboard_id = ?1 ORDER BY sort, id",
+    )?;
+    let rows = stmt.query_map(params![dashboard_id], |r| {
+        Ok(Panel {
+            id: r.get(0)?,
+            dashboard_id: r.get(1)?,
+            title: r.get(2)?,
+            kind: r.get(3)?,
+            chart_type: r.get(4)?,
+            args_json: r.get(5)?,
+            range_key: r.get(6)?,
+            x: r.get(7)?,
+            y: r.get(8)?,
+            w: r.get(9)?,
+            h: r.get(10)?,
+            sort: r.get(11)?,
+        })
+    })?;
+    collect(rows)
+}
+
+/// All dashboards with their panels, ordered by sort.
+pub fn list_dashboards(conn: &Connection) -> Result<Vec<Dashboard>, Error> {
+    let mut stmt =
+        conn.prepare("SELECT id, name, is_default, sort FROM dashboards ORDER BY sort, id")?;
+    let metas = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, i64>(2)? != 0,
+            r.get::<_, i64>(3)?,
+        ))
+    })?;
+    let metas = collect(metas)?;
+    let mut out = Vec::with_capacity(metas.len());
+    for (id, name, is_default, sort) in metas {
+        out.push(Dashboard {
+            id,
+            name,
+            is_default,
+            sort,
+            panels: panels_for(conn, id)?,
+        });
+    }
+    Ok(out)
+}
+
+/// Create an empty dashboard; returns its id.
+pub fn create_dashboard(conn: &Connection, name: &str) -> Result<i64, Error> {
+    let sort: i64 = conn.query_row("SELECT COALESCE(MAX(sort), -1) + 1 FROM dashboards", [], |r| {
+        r.get(0)
+    })?;
+    conn.execute(
+        "INSERT INTO dashboards(name, is_default, sort) VALUES(?1, 0, ?2)",
+        params![name, sort],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn rename_dashboard(conn: &Connection, id: i64, name: &str) -> Result<(), Error> {
+    conn.execute("UPDATE dashboards SET name = ?2 WHERE id = ?1", params![id, name])?;
+    Ok(())
+}
+
+pub fn delete_dashboard(conn: &Connection, id: i64) -> Result<(), Error> {
+    conn.execute("DELETE FROM dashboards WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+/// Replace all panels of a dashboard in one transaction (layout + config save).
+pub fn replace_panels(
+    conn: &mut Connection,
+    dashboard_id: i64,
+    panels: &[PanelInput],
+) -> Result<(), Error> {
+    let tx = conn.transaction()?;
+    tx.execute("DELETE FROM panels WHERE dashboard_id = ?1", params![dashboard_id])?;
+    {
+        let mut stmt = tx.prepare(
+            "INSERT INTO panels
+             (dashboard_id, title, kind, chart_type, args_json, range_key, x, y, w, h, sort)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        )?;
+        for (i, p) in panels.iter().enumerate() {
+            stmt.execute(params![
+                dashboard_id,
+                p.title,
+                p.kind,
+                p.chart_type,
+                p.args_json,
+                p.range_key,
+                p.x,
+                p.y,
+                p.w,
+                p.h,
+                if p.sort != 0 { p.sort } else { i as i64 },
+            ])?;
+        }
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+/// Seed one default dashboard the first time V3 runs (no-op if any exist).
+pub fn seed_default_dashboard(conn: &Connection) -> Result<(), Error> {
+    let count: i64 = conn.query_row("SELECT COUNT(*) FROM dashboards", [], |r| r.get(0))?;
+    if count > 0 {
+        return Ok(());
+    }
+    conn.execute(
+        "INSERT INTO dashboards(name, is_default, sort) VALUES('Overview', 1, 0)",
+        [],
+    )?;
+    let id = conn.last_insert_rowid();
+    // (title, kind, chart_type, range_key, x, y, w, h)
+    let seed: &[(&str, &str, &str, &str, i64, i64, i64, i64)] = &[
+        ("Focused windows over time", "focus_timeline", "area", "24h", 0, 0, 12, 7),
+        ("Top apps by CPU", "top_apps", "bar", "24h", 0, 7, 6, 7),
+        ("Network throughput", "net_throughput", "area", "24h", 6, 7, 6, 7),
+        ("Connection split", "net_split", "donut", "24h", 0, 14, 4, 6),
+        ("Focus by day", "focus_calendar", "calendar", "30d", 4, 14, 8, 6),
+    ];
+    let mut stmt = conn.prepare(
+        "INSERT INTO panels
+         (dashboard_id, title, kind, chart_type, args_json, range_key, x, y, w, h, sort)
+         VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?6, ?7, ?8, ?9, ?10)",
+    )?;
+    for (i, (title, kind, chart, range, x, y, w, h)) in seed.iter().enumerate() {
+        stmt.execute(params![id, title, kind, chart, range, x, y, w, h, i as i64])?;
+    }
+    Ok(())
 }
 
 // ── Retention: roll completed days into dailies, prune old raw samples ────────

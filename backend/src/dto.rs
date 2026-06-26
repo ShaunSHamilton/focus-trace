@@ -1,7 +1,7 @@
 //! Serde data-transfer objects returned to the frontend over IPC and emitted
 //! as the `telemetry-update` event payload. camelCase to match TS conventions.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -149,4 +149,59 @@ pub struct FocusTimeline {
     pub bucket_secs: i64,
     pub series: Vec<FocusTimelineSeries>,
     pub points: Vec<FocusTimelinePoint>,
+}
+
+/// Total focus seconds for one UTC day (for the calendar-heatmap panel).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DayFocus {
+    pub day: i64, // unix secs at UTC midnight
+    pub focus_secs: i64,
+}
+
+// ── Custom dashboards ─────────────────────────────────────────────────────────
+
+/// One panel on a dashboard: a data `kind` + `chart_type` placed in a grid cell.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Panel {
+    pub id: i64,
+    pub dashboard_id: i64,
+    pub title: String,
+    pub kind: String,
+    pub chart_type: String,
+    pub args_json: String,
+    pub range_key: String,
+    pub x: i64,
+    pub y: i64,
+    pub w: i64,
+    pub h: i64,
+    pub sort: i64,
+}
+
+/// A dashboard with its panels (returned by `list_dashboards`).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Dashboard {
+    pub id: i64,
+    pub name: String,
+    pub is_default: bool,
+    pub sort: i64,
+    pub panels: Vec<Panel>,
+}
+
+/// Incoming panel from the frontend on save (id/dashboard_id assigned by server).
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelInput {
+    pub title: String,
+    pub kind: String,
+    pub chart_type: String,
+    pub args_json: String,
+    pub range_key: String,
+    pub x: i64,
+    pub y: i64,
+    pub w: i64,
+    pub h: i64,
+    pub sort: i64,
 }

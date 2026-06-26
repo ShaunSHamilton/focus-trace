@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 
-export type ViewName = "dashboard" | "apps" | "network" | "focus" | "settings";
+export type ViewName = "dashboard" | "dashboards" | "apps" | "network" | "focus" | "settings";
 
 const NAV: { name: ViewName; label: string; icon: string }[] = [
   { name: "dashboard", label: "Dashboard", icon: "▦" },
+  { name: "dashboards", label: "Dashboards", icon: "▥" },
   { name: "apps", label: "Applications", icon: "▤" },
   { name: "network", label: "Network", icon: "↯" },
   { name: "focus", label: "Focus", icon: "◎" },

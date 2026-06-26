@@ -4,12 +4,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppAggregate,
+  Dashboard,
+  DayFocus,
   FocusSummaryRow,
   FocusTimeline,
   LiveSnapshot,
   MetricPoint,
   NetPoint,
   NetTotals,
+  PanelInput,
   TitleFocusRow,
   TrackingConfig,
   WindowFocusRow,
@@ -54,6 +57,25 @@ export const focusTimeline = (
   bucketSecs?: number,
   limit?: number,
 ) => invoke<FocusTimeline>("focus_timeline", { from, to, bucketSecs, limit });
+
+export const focusByDay = (from: number, to: number) =>
+  invoke<DayFocus[]>("focus_by_day", { from, to });
+
+// ── Custom dashboards ─────────────────────────────────────────────────────────
+
+export const listDashboards = () => invoke<Dashboard[]>("list_dashboards");
+
+export const createDashboard = (name: string) =>
+  invoke<number>("create_dashboard", { name });
+
+export const renameDashboard = (id: number, name: string) =>
+  invoke<void>("rename_dashboard", { id, name });
+
+export const deleteDashboard = (id: number) =>
+  invoke<void>("delete_dashboard", { id });
+
+export const savePanels = (dashboardId: number, panels: PanelInput[]) =>
+  invoke<void>("save_panels", { dashboardId, panels });
 
 export const getTrackingConfig = () =>
   invoke<TrackingConfig>("get_tracking_config");

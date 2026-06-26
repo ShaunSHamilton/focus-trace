@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [1.1.0]
+
+### Added
+
+- Custom dashboards
+
 ## [1.0.0]
 
 Initial release. Windows only support.

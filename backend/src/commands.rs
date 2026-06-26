@@ -2,8 +2,8 @@ use tauri::{AppHandle, State, Window};
 
 use crate::db::queries;
 use crate::dto::{
-    AppAggregate, FocusSummaryRow, FocusTimeline, LiveSnapshot, MetricPoint, NetPoint, NetTotals,
-    TitleFocusRow, WindowFocusRow,
+    AppAggregate, Dashboard, DayFocus, FocusSummaryRow, FocusTimeline, LiveSnapshot, MetricPoint,
+    NetPoint, NetTotals, PanelInput, TitleFocusRow, WindowFocusRow,
 };
 use crate::error::Error;
 use crate::settings::TrackingConfig;
@@ -118,6 +118,54 @@ pub fn focus_timeline(
 ) -> Result<FocusTimeline, Error> {
     let conn = state.db.lock().unwrap();
     queries::focus_timeline(&conn, from, to, bucket_secs.unwrap_or(600), limit.unwrap_or(30))
+}
+
+/// Total focus seconds per UTC day over a range (calendar-heatmap panel).
+#[tauri::command]
+pub fn focus_by_day(
+    state: State<'_, AppState>,
+    from: i64,
+    to: i64,
+) -> Result<Vec<DayFocus>, Error> {
+    let conn = state.db.lock().unwrap();
+    queries::focus_by_day(&conn, from, to)
+}
+
+// ── Custom dashboards ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn list_dashboards(state: State<'_, AppState>) -> Result<Vec<Dashboard>, Error> {
+    let conn = state.db.lock().unwrap();
+    queries::list_dashboards(&conn)
+}
+
+#[tauri::command]
+pub fn create_dashboard(state: State<'_, AppState>, name: String) -> Result<i64, Error> {
+    let conn = state.db.lock().unwrap();
+    queries::create_dashboard(&conn, &name)
+}
+
+#[tauri::command]
+pub fn rename_dashboard(state: State<'_, AppState>, id: i64, name: String) -> Result<(), Error> {
+    let conn = state.db.lock().unwrap();
+    queries::rename_dashboard(&conn, id, &name)
+}
+
+#[tauri::command]
+pub fn delete_dashboard(state: State<'_, AppState>, id: i64) -> Result<(), Error> {
+    let conn = state.db.lock().unwrap();
+    queries::delete_dashboard(&conn, id)
+}
+
+/// Replace all panels of a dashboard (used to persist the editor's layout).
+#[tauri::command]
+pub fn save_panels(
+    state: State<'_, AppState>,
+    dashboard_id: i64,
+    panels: Vec<PanelInput>,
+) -> Result<(), Error> {
+    let mut conn = state.db.lock().unwrap();
+    queries::replace_panels(&mut conn, dashboard_id, &panels)
 }
 
 #[tauri::command]

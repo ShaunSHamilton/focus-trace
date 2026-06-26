@@ -105,6 +105,48 @@ export interface FocusTimeline {
   points: FocusTimelinePoint[];
 }
 
+export interface DayFocus {
+  day: number; // unix secs at UTC midnight
+  focusSecs: number;
+}
+
+export interface Panel {
+  id: number;
+  dashboardId: number;
+  title: string;
+  kind: string;
+  chartType: string;
+  argsJson: string;
+  rangeKey: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  sort: number;
+}
+
+export interface Dashboard {
+  id: number;
+  name: string;
+  isDefault: boolean;
+  sort: number;
+  panels: Panel[];
+}
+
+/** Panel payload sent on save (server assigns id/dashboardId). */
+export interface PanelInput {
+  title: string;
+  kind: string;
+  chartType: string;
+  argsJson: string;
+  rangeKey: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  sort: number;
+}
+
 export interface TrackingConfig {
   ignoreSystemProcesses: boolean;
   pollSecs: number;
