@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card } from "../components/card";
 import { Page } from "../components/page";
+import { UpdateChecker } from "../components/update-checker";
 import { useCommand } from "../hooks/use-command";
 import { getTrackingConfig, restartApp, setTrackingConfig } from "../lib/ipc";
 import type { TrackingConfig } from "../lib/types";
@@ -118,6 +119,8 @@ export function SettingsView() {
           Restart now
         </button>
       </div>
+
+      <UpdateChecker />
     </Page>
   );
 }

@@ -7,6 +7,7 @@
 ### Add
 
 - Per-window-title focus tracking (e.g. browser tab / page titles): focus time is attributed to the active window title, with a per-app drill-down and a top-titles view.
+- Updater
 
 ## [1.0.0]
 
