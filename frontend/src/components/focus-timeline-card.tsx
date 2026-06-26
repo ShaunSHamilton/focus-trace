@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useCommand } from "../hooks/use-command";
-import { useTick } from "../hooks/use-tick";
 import { seriesColor } from "../lib/colors";
 import { formatClock, formatDuration } from "../lib/format";
 import { focusTimeline } from "../lib/ipc";
@@ -8,16 +7,19 @@ import { FOCUS_RANGES, rangeBounds, type FocusRangeKey } from "../lib/range";
 import { Card } from "./card";
 import { FocusTimelineChart } from "./charts/focus-timeline-chart";
 
-export function FocusTimelineCard() {
+export const FocusTimelineCard = memo(function FocusTimelineCard() {
   const [rangeKey, setRangeKey] = useState<FocusRangeKey>("1d");
   const [hidden, setHidden] = useState<Set<number>>(new Set());
   const range = FOCUS_RANGES.find((r) => r.key === rangeKey)!;
-  const tick = useTick();
 
-  const { data, loading, error } = useCommand(() => {
-    const { from, to } = rangeBounds(range.secs);
-    return focusTimeline(from, to, range.bucket, 30);
-  }, [rangeKey, tick]);
+  const { data, loading, error } = useCommand(
+    () => {
+      const { from, to } = rangeBounds(range.secs);
+      return focusTimeline(from, to, range.bucket, 30);
+    },
+    [rangeKey],
+    { live: true },
+  );
 
   // Stable color per series (the aggregated "Other" series is neutral grey).
   const colorFor = useMemo(() => {
@@ -130,4 +132,4 @@ export function FocusTimelineCard() {
       )}
     </Card>
   );
-}
+});

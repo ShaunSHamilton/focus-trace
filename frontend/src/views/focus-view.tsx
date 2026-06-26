@@ -3,7 +3,6 @@ import { Card } from "../components/card";
 import { Page } from "../components/page";
 import { TimeRangeSelector } from "../components/time-range-selector";
 import { useCommand } from "../hooks/use-command";
-import { useTick } from "../hooks/use-tick";
 import { COLORS } from "../lib/colors";
 import { formatDuration } from "../lib/format";
 import { appWindowFocus, focusSummary, windowFocusSummary } from "../lib/ipc";
@@ -13,17 +12,24 @@ import type { FocusSummaryRow } from "../lib/types";
 export function FocusView() {
   const [rangeKey, setRangeKey] = useState<RangeKey>("24h");
   const range = RANGES.find((r) => r.key === rangeKey)!;
-  const tick = useTick(); // re-fetch on every backend telemetry tick
 
-  const { data: apps, loading } = useCommand(() => {
-    const { from, to } = rangeBounds(range.secs);
-    return focusSummary(from, to, 30);
-  }, [rangeKey, tick]);
+  const { data: apps, loading } = useCommand(
+    () => {
+      const { from, to } = rangeBounds(range.secs);
+      return focusSummary(from, to, 30);
+    },
+    [rangeKey],
+    { live: true },
+  );
 
-  const { data: titles } = useCommand(() => {
-    const { from, to } = rangeBounds(range.secs);
-    return windowFocusSummary(from, to, 25);
-  }, [rangeKey, tick]);
+  const { data: titles } = useCommand(
+    () => {
+      const { from, to } = rangeBounds(range.secs);
+      return windowFocusSummary(from, to, 25);
+    },
+    [rangeKey],
+    { live: true },
+  );
 
   const appRows = apps ?? [];
   const appMax = Math.max(1, ...appRows.map((r) => r.focusSecs));
@@ -39,7 +45,7 @@ export function FocusView() {
         )}
         <ul className="flex flex-col gap-2">
           {appRows.map((r) => (
-            <AppFocusRow key={r.appId} row={r} max={appMax} rangeSecs={range.secs} tick={tick} />
+            <AppFocusRow key={r.appId} row={r} max={appMax} rangeSecs={range.secs} />
           ))}
         </ul>
         {appRows.length > 0 && (
@@ -74,12 +80,10 @@ function AppFocusRow({
   row,
   max,
   rangeSecs,
-  tick,
 }: {
   row: FocusSummaryRow;
   max: number;
   rangeSecs: number;
-  tick: number;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -97,24 +101,20 @@ function AppFocusRow({
           {formatDuration(row.focusSecs)}
         </span>
       </button>
-      {open && <TitleBreakdown appId={row.appId} rangeSecs={rangeSecs} tick={tick} />}
+      {open && <TitleBreakdown appId={row.appId} rangeSecs={rangeSecs} />}
     </li>
   );
 }
 
-function TitleBreakdown({
-  appId,
-  rangeSecs,
-  tick,
-}: {
-  appId: number;
-  rangeSecs: number;
-  tick: number;
-}) {
-  const { data, loading } = useCommand(() => {
-    const { from, to } = rangeBounds(rangeSecs);
-    return appWindowFocus(appId, from, to, 10);
-  }, [appId, rangeSecs, tick]);
+function TitleBreakdown({ appId, rangeSecs }: { appId: number; rangeSecs: number }) {
+  const { data, loading } = useCommand(
+    () => {
+      const { from, to } = rangeBounds(rangeSecs);
+      return appWindowFocus(appId, from, to, 10);
+    },
+    [appId, rangeSecs],
+    { live: true },
+  );
 
   const rows = data ?? [];
   const max = Math.max(1, ...rows.map((r) => r.focusSecs));
