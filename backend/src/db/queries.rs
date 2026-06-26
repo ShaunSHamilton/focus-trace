@@ -1,6 +1,8 @@
 //! All SQL lives here. No SQL string should appear outside this module.
 
-use crate::dto::{AppAggregate, FocusSummaryRow, MetricPoint, NetPoint, NetTotals};
+use crate::dto::{
+    AppAggregate, FocusSummaryRow, MetricPoint, NetPoint, NetTotals, TitleFocusRow, WindowFocusRow,
+};
 use crate::error::Error;
 use crate::telemetry::Snapshot;
 use rusqlite::{params, Connection};
@@ -120,6 +122,20 @@ pub fn lookup_app_id(conn: &Connection, exe_path: &str) -> Result<Option<i64>, E
     }
 }
 
+/// Insert (app_id, title) if new; returns its id.
+pub fn upsert_window_title(conn: &Connection, app_id: i64, title: &str) -> Result<i64, Error> {
+    conn.execute(
+        "INSERT OR IGNORE INTO window_titles(app_id, title) VALUES(?1, ?2)",
+        params![app_id, title],
+    )?;
+    let id: i64 = conn.query_row(
+        "SELECT id FROM window_titles WHERE app_id = ?1 AND title = ?2",
+        params![app_id, title],
+        |r| r.get(0),
+    )?;
+    Ok(id)
+}
+
 /// Persist one tick atomically: upsert apps, insert resource + network samples,
 /// accumulate run/focus totals, record any finished focus session. Returns the
 /// exe→id map (for building the live snapshot) and the focused app's id.
@@ -181,10 +197,14 @@ pub fn persist_tick(
             None => lookup_app_id(&tx, &f.exe_path)?,
         };
         if let Some(id) = id {
+            let title_id = match &f.title {
+                Some(t) if !t.is_empty() => Some(upsert_window_title(&tx, id, t)?),
+                _ => None,
+            };
             tx.execute(
-                "INSERT INTO focus_sessions (app_id, started_at, ended_at, duration)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![id, f.started_at, f.ended_at, f.duration],
+                "INSERT INTO focus_sessions (app_id, started_at, ended_at, duration, title_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![id, f.started_at, f.ended_at, f.duration, title_id],
             )?;
             tx.execute(
                 "INSERT OR IGNORE INTO app_usage(app_id) VALUES(?1)",
@@ -341,6 +361,56 @@ pub fn focus_summary(
             app_id: r.get(0)?,
             name: r.get(1)?,
             focus_secs: r.get(2)?,
+        })
+    })?;
+    collect(rows)
+}
+
+/// Top window titles within one app over a range.
+pub fn app_window_focus(
+    conn: &Connection,
+    app_id: i64,
+    from: i64,
+    to: i64,
+    limit: i64,
+) -> Result<Vec<TitleFocusRow>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT COALESCE(w.title, '(no title)'), SUM(f.duration) AS secs
+         FROM focus_sessions f
+         LEFT JOIN window_titles w ON w.id = f.title_id
+         WHERE f.app_id = ?1 AND f.started_at BETWEEN ?2 AND ?3
+         GROUP BY f.title_id ORDER BY secs DESC LIMIT ?4",
+    )?;
+    let rows = stmt.query_map(params![app_id, from, to, limit], |r| {
+        Ok(TitleFocusRow {
+            title: r.get(0)?,
+            focus_secs: r.get(1)?,
+        })
+    })?;
+    collect(rows)
+}
+
+/// Top window titles across all apps over a range.
+pub fn window_focus_summary(
+    conn: &Connection,
+    from: i64,
+    to: i64,
+    limit: i64,
+) -> Result<Vec<WindowFocusRow>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT a.id, a.name, COALESCE(w.title, '(no title)'), SUM(f.duration) AS secs
+         FROM focus_sessions f
+         JOIN apps a ON a.id = f.app_id
+         LEFT JOIN window_titles w ON w.id = f.title_id
+         WHERE f.started_at BETWEEN ?1 AND ?2
+         GROUP BY f.app_id, f.title_id ORDER BY secs DESC LIMIT ?3",
+    )?;
+    let rows = stmt.query_map(params![from, to, limit], |r| {
+        Ok(WindowFocusRow {
+            app_id: r.get(0)?,
+            name: r.get(1)?,
+            title: r.get(2)?,
+            focus_secs: r.get(3)?,
         })
     })?;
     collect(rows)

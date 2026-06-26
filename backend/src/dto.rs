@@ -37,6 +37,7 @@ pub struct LiveSnapshot {
     pub apps: Vec<AppSnapshot>,
     pub net: NetSnapshot,
     pub focused_app_id: Option<i64>,
+    pub focused_title: Option<String>,
 }
 
 // ── Historical read DTOs ──────────────────────────────────────────────────────
@@ -98,5 +99,23 @@ pub struct NetTotals {
 pub struct FocusSummaryRow {
     pub app_id: i64,
     pub name: String,
+    pub focus_secs: i64,
+}
+
+/// Focus time for a single window title within one app.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TitleFocusRow {
+    pub title: String,
+    pub focus_secs: i64,
+}
+
+/// Focus time per window title across all apps (with the owning app).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowFocusRow {
+    pub app_id: i64,
+    pub name: String,
+    pub title: String,
     pub focus_secs: i64,
 }

@@ -31,7 +31,12 @@ export function DashboardView() {
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Tracked apps" value={apps.length} />
-        <StatTile label="Focused" value={focused?.name ?? "—"} accent={COLORS.accent} />
+        <StatTile
+          label="Focused"
+          value={focused?.name ?? "—"}
+          sub={snap.focusedTitle ?? undefined}
+          accent={COLORS.accent}
+        />
         <StatTile label="Total CPU" value={formatPercent(totalCpu)} accent={COLORS.cpu} />
         <StatTile label="Total RAM" value={formatBytes(totalMem)} accent={COLORS.mem} />
       </div>

@@ -33,6 +33,7 @@ pub struct NetDelta {
 #[derive(Debug, Clone)]
 pub struct FinishedFocus {
     pub exe_path: String,
+    pub title: Option<String>,
     pub started_at: i64,
     pub ended_at: i64,
     pub duration: i64,
@@ -45,6 +46,7 @@ pub struct Snapshot {
     pub apps: Vec<AppMetric>,
     pub net: NetDelta,
     pub focused_exe: Option<String>,
+    pub focused_title: Option<String>,
     pub finished_focus: Option<FinishedFocus>,
 }
 
@@ -88,5 +90,6 @@ pub fn build_live_snapshot(
             other_out_b: n.other_out,
         },
         focused_app_id,
+        focused_title: snap.focused_title.clone(),
     }
 }

@@ -24,7 +24,7 @@ export function AppLayout({
       <aside className="flex w-52 shrink-0 flex-col border-r border-[#262626] bg-[#0c0c0c]">
         <div className="flex items-center gap-2 px-4 py-4">
           <img src="/icon.png" alt="" className="h-6 w-6 rounded" />
-          <span className="text-sm font-semibold">App View</span>
+          <span className="text-sm font-semibold">Focus Trace</span>
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 px-2">
           {NAV.map((n) => (
@@ -42,7 +42,9 @@ export function AppLayout({
             </button>
           ))}
         </nav>
-        <div className="px-4 py-3 text-[10px] text-neutral-600">Windows telemetry</div>
+        <div className="px-4 py-3 text-[10px] text-neutral-600">
+          Windows telemetry
+        </div>
       </aside>
       <main className="flex-1 overflow-y-auto">{children}</main>
     </div>

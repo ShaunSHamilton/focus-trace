@@ -9,7 +9,9 @@ import type {
   MetricPoint,
   NetPoint,
   NetTotals,
+  TitleFocusRow,
   TrackingConfig,
+  WindowFocusRow,
 } from "./types";
 
 export const restartApp = () => invoke<void>("restart_app");
@@ -34,6 +36,16 @@ export const networkTotals = (from: number, to: number) =>
 
 export const focusSummary = (from: number, to: number, limit?: number) =>
   invoke<FocusSummaryRow[]>("focus_summary", { from, to, limit });
+
+export const appWindowFocus = (
+  appId: number,
+  from: number,
+  to: number,
+  limit?: number,
+) => invoke<TitleFocusRow[]>("app_window_focus", { appId, from, to, limit });
+
+export const windowFocusSummary = (from: number, to: number, limit?: number) =>
+  invoke<WindowFocusRow[]>("window_focus_summary", { from, to, limit });
 
 export const getTrackingConfig = () =>
   invoke<TrackingConfig>("get_tracking_config");

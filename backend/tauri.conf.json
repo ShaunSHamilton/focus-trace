@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "App View",
-  "version": "1.0.0",
-  "identifier": "com.app-view.app",
+  "productName": "Focus Trace",
+  "version": "1.1.0",
+  "identifier": "com.focus-trace.app",
   "build": {
     "beforeDevCommand": "bun run --bun dev",
     "beforeBuildCommand": "bun run --bun build",
@@ -13,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "App View",
+        "title": "Focus Trace",
         "label": "main"
       }
     ],

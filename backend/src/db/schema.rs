@@ -9,7 +9,7 @@ PRAGMA foreign_keys = ON;";
 
 /// Ordered, idempotent migrations. Index + 1 == the `user_version` it sets.
 /// Append new entries; never edit a shipped one.
-pub const MIGRATIONS: &[&str] = &[V1];
+pub const MIGRATIONS: &[&str] = &[V1, V2];
 
 const V1: &str = r#"
 -- App identity: the long exe-path string is stored ONCE and referenced by FK.
@@ -97,6 +97,19 @@ CREATE TABLE IF NOT EXISTS tracking_rules (
     exe_path TEXT PRIMARY KEY,
     mode     INTEGER NOT NULL
 );
+"#;
+
+// Window-title focus: dedup titles per app, link focus sessions to a title.
+const V2: &str = r#"
+CREATE TABLE IF NOT EXISTS window_titles (
+    id     INTEGER PRIMARY KEY,
+    app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    title  TEXT    NOT NULL,
+    UNIQUE (app_id, title)
+);
+-- Nullable FK; SQLite ADD COLUMN with REFERENCES requires a NULL default.
+ALTER TABLE focus_sessions ADD COLUMN title_id INTEGER REFERENCES window_titles(id);
+CREATE INDEX IF NOT EXISTS idx_focus_title ON focus_sessions(title_id);
 "#;
 
 /// Apply any migrations newer than the stored `user_version`.

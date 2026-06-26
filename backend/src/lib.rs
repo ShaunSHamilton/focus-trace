@@ -1,7 +1,7 @@
 use tauri::{
+    App, AppHandle, Emitter, Manager, Window, WindowEvent,
     menu::{Menu, MenuEvent, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
-    App, AppHandle, Emitter, Manager, Window, WindowEvent,
 };
 
 use std::sync::{Mutex, RwLock};
@@ -33,6 +33,8 @@ pub fn run() {
             commands::network_history,
             commands::network_totals,
             commands::focus_summary,
+            commands::app_window_focus,
+            commands::window_focus_summary,
             commands::get_tracking_config,
             commands::set_tracking_config,
         ])
@@ -43,7 +45,7 @@ pub fn run() {
 }
 
 fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
-    let open_i = MenuItem::with_id(app, "open", "Open App View", true, None::<&str>)?;
+    let open_i = MenuItem::with_id(app, "open", "Open Focus Trace", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open_i, &quit_i])?;
     let _tray = TrayIconBuilder::new()
@@ -54,8 +56,8 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
                 .expect("window default icon to exist")
                 .clone(),
         )
-        .title("App View")
-        .tooltip("App View")
+        .title("Focus Trace")
+        .tooltip("Focus Trace")
         .on_menu_event(on_menu_event)
         .on_tray_icon_event(on_tray_icon_event)
         .build(app)?;
@@ -114,14 +116,19 @@ fn poll_loop(handle: AppHandle, poll_secs: u64) {
             c.system.refresh_processes(ProcessesToUpdate::All, true);
             let cfg = state.config.read().unwrap().clone();
             let apps = telemetry::process::aggregate(&c.system, &cfg);
-            let fg = telemetry::focus::foreground_exe(&c.system);
+            let fg = telemetry::focus::foreground_window(&c.system);
             let finished = c.focus.update(fg.clone(), now);
+            let (focused_exe, focused_title) = match fg {
+                Some((exe, title)) => (Some(exe), title),
+                None => (None, None),
+            };
             let net = telemetry::network::read_and_diff(&mut c.net);
             telemetry::Snapshot {
                 ts: now,
                 apps,
                 net,
-                focused_exe: fg,
+                focused_exe,
+                focused_title,
                 finished_focus: finished,
             }
         };

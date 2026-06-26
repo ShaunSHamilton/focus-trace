@@ -27,6 +27,7 @@ export interface LiveSnapshot {
   apps: AppSnapshot[];
   net: NetSnapshot;
   focusedAppId: number | null;
+  focusedTitle: string | null;
 }
 
 export interface AppAggregate {
@@ -71,6 +72,18 @@ export interface NetTotals {
 export interface FocusSummaryRow {
   appId: number;
   name: string;
+  focusSecs: number;
+}
+
+export interface TitleFocusRow {
+  title: string;
+  focusSecs: number;
+}
+
+export interface WindowFocusRow {
+  appId: number;
+  name: string;
+  title: string;
   focusSecs: number;
 }
 
