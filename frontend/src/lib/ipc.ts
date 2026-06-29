@@ -6,6 +6,10 @@ import type {
   AppAggregate,
   Dashboard,
   DayFocus,
+  FocusFilterOptions,
+  FocusGroup,
+  FocusGroupInput,
+  FocusGroupSummaryRow,
   FocusSummaryRow,
   FocusTimeline,
   LiveSnapshot,
@@ -60,6 +64,25 @@ export const focusTimeline = (
 
 export const focusByDay = (from: number, to: number) =>
   invoke<DayFocus[]>("focus_by_day", { from, to });
+
+// ── Focus groups ────────────────────────────────────────────────────────────
+
+export const listFocusGroups = () => invoke<FocusGroup[]>("list_focus_groups");
+
+export const saveFocusGroups = (groups: FocusGroupInput[]) =>
+  invoke<void>("save_focus_groups", { groups });
+
+export const focusFilterOptions = () =>
+  invoke<FocusFilterOptions>("focus_filter_options");
+
+export const focusByGroup = (from: number, to: number) =>
+  invoke<FocusGroupSummaryRow[]>("focus_by_group", { from, to });
+
+export const focusGroupTimeline = (
+  from: number,
+  to: number,
+  bucketSecs?: number,
+) => invoke<FocusTimeline>("focus_group_timeline", { from, to, bucketSecs });
 
 // ── Custom dashboards ─────────────────────────────────────────────────────────
 

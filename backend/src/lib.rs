@@ -16,6 +16,7 @@ mod commands;
 mod db;
 mod dto;
 mod error;
+mod focus_groups;
 mod settings;
 mod state;
 mod telemetry;
@@ -38,6 +39,11 @@ pub fn run() {
             commands::window_focus_summary,
             commands::focus_timeline,
             commands::focus_by_day,
+            commands::list_focus_groups,
+            commands::save_focus_groups,
+            commands::focus_filter_options,
+            commands::focus_by_group,
+            commands::focus_group_timeline,
             commands::list_dashboards,
             commands::create_dashboard,
             commands::rename_dashboard,

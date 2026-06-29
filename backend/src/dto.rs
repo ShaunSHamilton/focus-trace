@@ -131,6 +131,9 @@ pub struct FocusTimelineSeries {
     pub app_name: String,
     pub title: String,
     pub total_secs: i64,
+    /// Explicit series color (used by the grouped timeline); empty = let the
+    /// frontend pick a palette color by index.
+    pub color: String,
 }
 
 /// Focus seconds for one time bucket, aligned to the `series` order.
@@ -149,6 +152,56 @@ pub struct FocusTimeline {
     pub bucket_secs: i64,
     pub series: Vec<FocusTimelineSeries>,
     pub points: Vec<FocusTimelinePoint>,
+}
+
+// ── Focus groups (user-defined buckets with match rules) ──────────────────────
+
+/// One match rule. `field` is `exe` (app name) or `title` (window title);
+/// `op` is `contains` | `equals` | `regex`; all case-insensitive.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusGroupRule {
+    pub field: String,
+    pub op: String,
+    pub value: String,
+}
+
+/// A named group with its ordered rules (OR semantics within a group).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusGroup {
+    pub id: i64,
+    pub name: String,
+    pub color: String,
+    pub rules: Vec<FocusGroupRule>,
+}
+
+/// Incoming group on save (id/sort assigned by the server).
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusGroupInput {
+    pub name: String,
+    pub color: String,
+    pub rules: Vec<FocusGroupRule>,
+}
+
+/// Distinct executables and window titles seen so far, for autocompleting rule
+/// values when building groups. Titles are capped and ranked by focus time.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusFilterOptions {
+    pub exes: Vec<String>,
+    pub titles: Vec<String>,
+}
+
+/// Focus time rolled up into one group over a range. `group_id` 0 = "Ungrouped".
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusGroupSummaryRow {
+    pub group_id: i64,
+    pub name: String,
+    pub color: String,
+    pub focus_secs: i64,
 }
 
 /// Total focus seconds for one UTC day (for the calendar-heatmap panel).

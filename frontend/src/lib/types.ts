@@ -88,10 +88,49 @@ export interface WindowFocusRow {
 }
 
 export interface FocusTimelineSeries {
-  id: number; // title id; 0 = "(no title)", -1 = "Other"
+  id: number; // title id; 0 = "(no title)", -1 = "Other". In group mode: group id.
   appName: string;
   title: string;
   totalSecs: number;
+  color: string; // explicit color (group mode); empty = pick by index
+}
+
+// ── Focus groups ────────────────────────────────────────────────────────────
+
+export type GroupField = "exe" | "title";
+export type GroupOp = "contains" | "equals" | "regex";
+
+export interface FocusGroupRule {
+  field: GroupField;
+  op: GroupOp;
+  value: string;
+}
+
+export interface FocusGroup {
+  id: number;
+  name: string;
+  color: string;
+  rules: FocusGroupRule[];
+}
+
+/** Group payload sent on save (server assigns id/order). */
+export interface FocusGroupInput {
+  name: string;
+  color: string;
+  rules: FocusGroupRule[];
+}
+
+export interface FocusGroupSummaryRow {
+  groupId: number; // 0 = "Ungrouped"
+  name: string;
+  color: string;
+  focusSecs: number;
+}
+
+/** Known executables + titles for autocompleting group rule values. */
+export interface FocusFilterOptions {
+  exes: string[];
+  titles: string[];
 }
 
 export interface FocusTimelinePoint {

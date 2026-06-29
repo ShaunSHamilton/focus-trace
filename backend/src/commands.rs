@@ -2,10 +2,12 @@ use tauri::{AppHandle, State, Window};
 
 use crate::db::queries;
 use crate::dto::{
-    AppAggregate, Dashboard, DayFocus, FocusSummaryRow, FocusTimeline, LiveSnapshot, MetricPoint,
-    NetPoint, NetTotals, PanelInput, TitleFocusRow, WindowFocusRow,
+    AppAggregate, Dashboard, DayFocus, FocusFilterOptions, FocusGroup, FocusGroupInput,
+    FocusGroupSummaryRow, FocusSummaryRow, FocusTimeline, LiveSnapshot, MetricPoint, NetPoint,
+    NetTotals, PanelInput, TitleFocusRow, WindowFocusRow,
 };
 use crate::error::Error;
+use crate::focus_groups::Matcher;
 use crate::settings::TrackingConfig;
 use crate::state::AppState;
 use crate::util;
@@ -129,6 +131,55 @@ pub fn focus_by_day(
 ) -> Result<Vec<DayFocus>, Error> {
     let conn = state.db.lock().unwrap();
     queries::focus_by_day(&conn, from, to)
+}
+
+// ── Focus groups ──────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn list_focus_groups(state: State<'_, AppState>) -> Result<Vec<FocusGroup>, Error> {
+    let conn = state.db.lock().unwrap();
+    queries::list_focus_groups(&conn)
+}
+
+#[tauri::command]
+pub fn save_focus_groups(
+    state: State<'_, AppState>,
+    groups: Vec<FocusGroupInput>,
+) -> Result<(), Error> {
+    let mut conn = state.db.lock().unwrap();
+    queries::replace_focus_groups(&mut conn, &groups)
+}
+
+/// Distinct executables + window titles for autocompleting group rule values.
+#[tauri::command]
+pub fn focus_filter_options(state: State<'_, AppState>) -> Result<FocusFilterOptions, Error> {
+    let conn = state.db.lock().unwrap();
+    queries::focus_filter_options(&conn)
+}
+
+/// Focus time per user-defined group over a range ("Ungrouped" catches the rest).
+#[tauri::command]
+pub fn focus_by_group(
+    state: State<'_, AppState>,
+    from: i64,
+    to: i64,
+) -> Result<Vec<FocusGroupSummaryRow>, Error> {
+    let conn = state.db.lock().unwrap();
+    let matcher = Matcher::build(&queries::list_focus_groups(&conn)?);
+    queries::focus_by_group(&conn, &matcher, from, to)
+}
+
+/// Per-group focus split across time buckets over a range (grouped timeline chart).
+#[tauri::command]
+pub fn focus_group_timeline(
+    state: State<'_, AppState>,
+    from: i64,
+    to: i64,
+    bucket_secs: Option<i64>,
+) -> Result<FocusTimeline, Error> {
+    let conn = state.db.lock().unwrap();
+    let matcher = Matcher::build(&queries::list_focus_groups(&conn)?);
+    queries::focus_group_timeline(&conn, &matcher, from, to, bucket_secs.unwrap_or(600))
 }
 
 // ── Custom dashboards ─────────────────────────────────────────────────────────

@@ -1,14 +1,19 @@
 //! All SQL lives here. No SQL string should appear outside this module.
 
 use crate::dto::{
-    AppAggregate, Dashboard, DayFocus, FocusSummaryRow, FocusTimeline, FocusTimelinePoint,
+    AppAggregate, Dashboard, DayFocus, FocusFilterOptions, FocusGroup, FocusGroupInput,
+    FocusGroupRule, FocusGroupSummaryRow, FocusSummaryRow, FocusTimeline, FocusTimelinePoint,
     FocusTimelineSeries, MetricPoint, NetPoint, NetTotals, Panel, PanelInput, TitleFocusRow,
     WindowFocusRow,
 };
 use crate::error::Error;
+use crate::focus_groups::Matcher;
 use crate::telemetry::Snapshot;
 use rusqlite::{params, Connection};
 use std::collections::HashMap;
+
+/// Identity of the implicit catch-all bucket for unmatched focus sessions.
+const UNGROUPED: (i64, &str, &str) = (0, "Ungrouped", "#525252");
 
 fn collect<T>(rows: impl Iterator<Item = rusqlite::Result<T>>) -> Result<Vec<T>, Error> {
     let mut out = Vec::new();
@@ -493,6 +498,7 @@ pub fn focus_timeline(
             app_name: app,
             title,
             total_secs: totals[k],
+            color: String::new(),
         });
     }
 
@@ -513,6 +519,7 @@ pub fn focus_timeline(
             app_name: String::new(),
             title: "Other".to_string(),
             total_secs: other_total,
+            color: String::new(),
         });
     }
 
@@ -551,6 +558,232 @@ pub fn focus_by_day(conn: &Connection, from: i64, to: i64) -> Result<Vec<DayFocu
         })
     })?;
     collect(rows)
+}
+
+// ── Focus groups ──────────────────────────────────────────────────────────────
+
+/// All focus groups with their ordered rules.
+pub fn list_focus_groups(conn: &Connection) -> Result<Vec<FocusGroup>, Error> {
+    let mut stmt = conn.prepare("SELECT id, name, color FROM focus_groups ORDER BY sort, id")?;
+    let metas = stmt.query_map([], |r| {
+        Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+    })?;
+    let metas = collect(metas)?;
+    let mut out = Vec::with_capacity(metas.len());
+    for (id, name, color) in metas {
+        let mut rs = conn.prepare(
+            "SELECT field, op, value FROM focus_group_rules WHERE group_id = ?1 ORDER BY sort, id",
+        )?;
+        let rules = rs.query_map(params![id], |r| {
+            Ok(FocusGroupRule {
+                field: r.get(0)?,
+                op: r.get(1)?,
+                value: r.get(2)?,
+            })
+        })?;
+        out.push(FocusGroup {
+            id,
+            name,
+            color,
+            rules: collect(rules)?,
+        });
+    }
+    Ok(out)
+}
+
+/// Replace the entire group set (+ rules) in one transaction. Order is taken
+/// from the input array. Cascades drop old rules via the FK.
+pub fn replace_focus_groups(
+    conn: &mut Connection,
+    groups: &[FocusGroupInput],
+) -> Result<(), Error> {
+    let tx = conn.transaction()?;
+    tx.execute("DELETE FROM focus_groups", [])?;
+    {
+        let mut gstmt =
+            tx.prepare("INSERT INTO focus_groups(name, color, sort) VALUES(?1, ?2, ?3)")?;
+        let mut rstmt = tx.prepare(
+            "INSERT INTO focus_group_rules(group_id, field, op, value, sort)
+             VALUES(?1, ?2, ?3, ?4, ?5)",
+        )?;
+        for (gi, g) in groups.iter().enumerate() {
+            gstmt.execute(params![g.name, g.color, gi as i64])?;
+            let gid = tx.last_insert_rowid();
+            for (ri, r) in g.rules.iter().enumerate() {
+                rstmt.execute(params![gid, r.field, r.op, r.value, ri as i64])?;
+            }
+        }
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+/// Distinct executables (app names) + window titles for rule autocompletion.
+/// Titles are ranked by total focus time and capped to keep the payload small.
+pub fn focus_filter_options(conn: &Connection) -> Result<FocusFilterOptions, Error> {
+    let mut exes_stmt = conn.prepare("SELECT name FROM apps GROUP BY name ORDER BY name")?;
+    let exes = collect(exes_stmt.query_map([], |r| r.get::<_, String>(0))?)?;
+
+    let mut titles_stmt = conn.prepare(
+        "SELECT w.title
+         FROM window_titles w
+         LEFT JOIN focus_sessions f ON f.title_id = w.id
+         GROUP BY w.title
+         ORDER BY COALESCE(SUM(f.duration), 0) DESC, w.title
+         LIMIT 500",
+    )?;
+    let titles = collect(titles_stmt.query_map([], |r| r.get::<_, String>(0))?)?;
+
+    Ok(FocusFilterOptions { exes, titles })
+}
+
+/// All focus rows (app name, title, duration) over a range — the raw input for
+/// group assignment, which happens in Rust against the compiled `Matcher`.
+fn focus_rows(
+    conn: &Connection,
+    from: i64,
+    to: i64,
+) -> Result<Vec<(String, String, i64)>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT a.name, COALESCE(w.title, '(no title)'), f.duration
+         FROM focus_sessions f
+         JOIN apps a ON a.id = f.app_id
+         LEFT JOIN window_titles w ON w.id = f.title_id
+         WHERE f.started_at BETWEEN ?1 AND ?2",
+    )?;
+    let rows = stmt.query_map(params![from, to], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))
+    })?;
+    collect(rows)
+}
+
+/// Focus time rolled up into user groups over a range, descending. Unmatched
+/// sessions accumulate into the "Ungrouped" bucket (group id 0).
+pub fn focus_by_group(
+    conn: &Connection,
+    matcher: &Matcher,
+    from: i64,
+    to: i64,
+) -> Result<Vec<FocusGroupSummaryRow>, Error> {
+    let mut totals: HashMap<i64, i64> = HashMap::new();
+    let mut meta: HashMap<i64, (String, String)> = HashMap::new();
+    for (name, title, dur) in focus_rows(conn, from, to)? {
+        let (gid, gname, gcolor) = matcher
+            .assign(&name, &title)
+            .map(|(id, n, c)| (id, n.to_string(), c.to_string()))
+            .unwrap_or_else(|| (UNGROUPED.0, UNGROUPED.1.to_string(), UNGROUPED.2.to_string()));
+        meta.entry(gid).or_insert((gname, gcolor));
+        *totals.entry(gid).or_insert(0) += dur;
+    }
+    let mut out: Vec<FocusGroupSummaryRow> = totals
+        .into_iter()
+        .map(|(group_id, focus_secs)| {
+            let (name, color) = meta.remove(&group_id).unwrap_or_default();
+            FocusGroupSummaryRow {
+                group_id,
+                name,
+                color,
+                focus_secs,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| b.focus_secs.cmp(&a.focus_secs));
+    Ok(out)
+}
+
+/// Per-group focus split across time buckets over a range (grouped timeline).
+/// Mirrors `focus_timeline` bucketing, but keys by assigned group and carries
+/// the group color on each series. No "Other" rollup (groups are already few).
+pub fn focus_group_timeline(
+    conn: &Connection,
+    matcher: &Matcher,
+    from: i64,
+    to: i64,
+    bucket: i64,
+) -> Result<FocusTimeline, Error> {
+    let bucket = bucket.max(1);
+    let span = (to - from).max(bucket);
+    let n = (((span + bucket - 1) / bucket) as usize).clamp(1, 5000);
+
+    let mut stmt = conn.prepare(
+        "SELECT f.started_at, f.ended_at, COALESCE(w.title, '(no title)'), a.name
+         FROM focus_sessions f
+         JOIN apps a ON a.id = f.app_id
+         LEFT JOIN window_titles w ON w.id = f.title_id
+         WHERE f.ended_at >= ?1 AND f.started_at <= ?2",
+    )?;
+
+    let mut buckets: HashMap<i64, Vec<i64>> = HashMap::new();
+    let mut totals: HashMap<i64, i64> = HashMap::new();
+    let mut meta: HashMap<i64, (String, String)> = HashMap::new();
+
+    let rows = stmt.query_map(params![from, to], |r| {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+        ))
+    })?;
+
+    for row in rows {
+        let (started, ended, title, app) = row?;
+        let (gid, gname, gcolor) = matcher
+            .assign(&app, &title)
+            .map(|(id, n, c)| (id, n.to_string(), c.to_string()))
+            .unwrap_or_else(|| (UNGROUPED.0, UNGROUPED.1.to_string(), UNGROUPED.2.to_string()));
+        meta.entry(gid).or_insert((gname, gcolor));
+        let s = started.max(from);
+        let e = ended.min(to);
+        if e <= s {
+            continue;
+        }
+        let bi_start = ((s - from) / bucket) as usize;
+        let bi_end = (((e - 1 - from) / bucket) as usize).min(n - 1);
+        let arr = buckets.entry(gid).or_insert_with(|| vec![0i64; n]);
+        for bi in bi_start..=bi_end {
+            let bstart = from + (bi as i64) * bucket;
+            let bend = bstart + bucket;
+            let overlap = e.min(bend) - s.max(bstart);
+            if overlap > 0 {
+                arr[bi] += overlap;
+                *totals.entry(gid).or_insert(0) += overlap;
+            }
+        }
+    }
+
+    let mut keys: Vec<i64> = totals.keys().copied().collect();
+    keys.sort_by(|a, b| totals[b].cmp(&totals[a]));
+
+    let series = keys
+        .iter()
+        .map(|k| {
+            let (name, color) = meta.get(k).cloned().unwrap_or_default();
+            FocusTimelineSeries {
+                id: *k,
+                app_name: String::new(),
+                title: name,
+                total_secs: totals[k],
+                color,
+            }
+        })
+        .collect();
+
+    let mut points = Vec::with_capacity(n);
+    for bi in 0..n {
+        let ts = from + (bi as i64) * bucket;
+        let secs = keys
+            .iter()
+            .map(|k| buckets.get(k).map(|a| a[bi]).unwrap_or(0))
+            .collect();
+        points.push(FocusTimelinePoint { ts, secs });
+    }
+
+    Ok(FocusTimeline {
+        bucket_secs: bucket,
+        series,
+        points,
+    })
 }
 
 // ── Custom dashboards ─────────────────────────────────────────────────────────

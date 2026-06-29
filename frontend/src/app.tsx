@@ -6,6 +6,7 @@ import { AppListView } from "./views/app-list-view";
 import { DashboardView } from "./views/dashboard-view";
 import { DashboardsView } from "./views/dashboards-view";
 import { FocusView } from "./views/focus-view";
+import { GroupsView } from "./views/groups-view";
 import { NetworkView } from "./views/network-view";
 import { SettingsView } from "./views/settings-view";
 
@@ -30,6 +31,7 @@ export function App() {
         ))}
       {view === "network" && <NetworkView />}
       {view === "focus" && <FocusView />}
+      {view === "groups" && <GroupsView />}
       {view === "settings" && <SettingsView />}
     </AppLayout>
   );

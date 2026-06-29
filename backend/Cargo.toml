@@ -24,6 +24,7 @@ time = "0.3.47"
 # references std::os::unix unconditionally), so we use rusqlite with the bundled
 # SQLite amalgamation — real SQLite, compiles natively on Windows arm64.
 rusqlite = { version = "0.40", features = ["bundled"] }
+regex = "1"
 sysinfo = "0.39"
 tauri-plugin-updater = "2"
 
