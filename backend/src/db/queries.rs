@@ -1,10 +1,10 @@
 //! All SQL lives here. No SQL string should appear outside this module.
 
 use crate::dto::{
-    AppAggregate, Dashboard, DayFocus, FocusFilterOptions, FocusGroup, FocusGroupInput,
-    FocusGroupRule, FocusGroupSummaryRow, FocusSummaryRow, FocusTimeline, FocusTimelinePoint,
-    FocusTimelineSeries, MetricPoint, NetPoint, NetTotals, Panel, PanelInput, TitleFocusRow,
-    WindowFocusRow,
+    AppAggregate, BrowserProfileRow, Dashboard, DayFocus, FocusFilterOptions, FocusGroup,
+    FocusGroupInput, FocusGroupRule, FocusGroupSummaryRow, FocusSummaryRow, FocusTimeline,
+    FocusTimelinePoint, FocusTimelineSeries, MetricPoint, NetPoint, NetTotals, Panel, PanelInput,
+    TitleFocusRow, UrlRow, WindowFocusRow,
 };
 use crate::error::Error;
 use crate::focus_groups::Matcher;
@@ -209,9 +209,10 @@ pub fn persist_tick(
                 _ => None,
             };
             tx.execute(
-                "INSERT INTO focus_sessions (app_id, started_at, ended_at, duration, title_id)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![id, f.started_at, f.ended_at, f.duration, title_id],
+                "INSERT INTO focus_sessions
+                 (app_id, started_at, ended_at, duration, title_id, browser_profile, url)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![id, f.started_at, f.ended_at, f.duration, title_id, f.browser_profile, f.url],
             )?;
             tx.execute(
                 "INSERT OR IGNORE INTO app_usage(app_id) VALUES(?1)",
@@ -618,8 +619,60 @@ pub fn replace_focus_groups(
     Ok(())
 }
 
-/// Distinct executables (app names) + window titles for rule autocompletion.
-/// Titles are ranked by total focus time and capped to keep the payload small.
+/// Focus time per browser profile for one app over a range.
+pub fn app_browser_profile_focus(
+    conn: &Connection,
+    app_id: i64,
+    from: i64,
+    to: i64,
+    limit: i64,
+) -> Result<Vec<BrowserProfileRow>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT browser_profile, SUM(duration) AS secs
+         FROM focus_sessions
+         WHERE app_id = ?1 AND started_at BETWEEN ?2 AND ?3
+           AND browser_profile IS NOT NULL
+         GROUP BY browser_profile
+         ORDER BY secs DESC
+         LIMIT ?4",
+    )?;
+    let rows = stmt.query_map(params![app_id, from, to, limit], |r| {
+        Ok(BrowserProfileRow {
+            profile: r.get(0)?,
+            focus_secs: r.get(1)?,
+        })
+    })?;
+    collect(rows)
+}
+
+/// Focus time per URL for one Chromium app over a range.
+pub fn app_url_focus(
+    conn: &Connection,
+    app_id: i64,
+    from: i64,
+    to: i64,
+    limit: i64,
+) -> Result<Vec<UrlRow>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT url, SUM(duration) AS secs
+         FROM focus_sessions
+         WHERE app_id = ?1 AND started_at BETWEEN ?2 AND ?3
+           AND url IS NOT NULL
+         GROUP BY url
+         ORDER BY secs DESC
+         LIMIT ?4",
+    )?;
+    let rows = stmt.query_map(params![app_id, from, to, limit], |r| {
+        Ok(UrlRow {
+            url: r.get(0)?,
+            focus_secs: r.get(1)?,
+        })
+    })?;
+    collect(rows)
+}
+
+/// Distinct executables + window titles + browser profiles + URLs for rule autocompletion.
+/// Titles and URLs are ranked by total focus time and capped to keep the payload small.
 pub fn focus_filter_options(conn: &Connection) -> Result<FocusFilterOptions, Error> {
     let mut exes_stmt = conn.prepare("SELECT name FROM apps GROUP BY name ORDER BY name")?;
     let exes = collect(exes_stmt.query_map([], |r| r.get::<_, String>(0))?)?;
@@ -634,25 +687,47 @@ pub fn focus_filter_options(conn: &Connection) -> Result<FocusFilterOptions, Err
     )?;
     let titles = collect(titles_stmt.query_map([], |r| r.get::<_, String>(0))?)?;
 
-    Ok(FocusFilterOptions { exes, titles })
+    let mut profiles_stmt = conn.prepare(
+        "SELECT DISTINCT browser_profile FROM focus_sessions
+         WHERE browser_profile IS NOT NULL
+         ORDER BY browser_profile",
+    )?;
+    let browser_profiles = collect(profiles_stmt.query_map([], |r| r.get::<_, String>(0))?)?;
+
+    let mut urls_stmt = conn.prepare(
+        "SELECT url, SUM(duration) AS secs
+         FROM focus_sessions
+         WHERE url IS NOT NULL
+         GROUP BY url
+         ORDER BY secs DESC
+         LIMIT 500",
+    )?;
+    let urls = collect(urls_stmt.query_map([], |r| r.get::<_, String>(0))?)?;
+
+    Ok(FocusFilterOptions { exes, titles, browser_profiles, urls })
 }
 
-/// All focus rows (app name, title, duration) over a range — the raw input for
-/// group assignment, which happens in Rust against the compiled `Matcher`.
+/// All focus rows (app name, title, browser_profile, url, duration) over a range.
 fn focus_rows(
     conn: &Connection,
     from: i64,
     to: i64,
-) -> Result<Vec<(String, String, i64)>, Error> {
+) -> Result<Vec<(String, String, Option<String>, Option<String>, i64)>, Error> {
     let mut stmt = conn.prepare(
-        "SELECT a.name, COALESCE(w.title, '(no title)'), f.duration
+        "SELECT a.name, COALESCE(w.title, '(no title)'), f.browser_profile, f.url, f.duration
          FROM focus_sessions f
          JOIN apps a ON a.id = f.app_id
          LEFT JOIN window_titles w ON w.id = f.title_id
          WHERE f.started_at BETWEEN ?1 AND ?2",
     )?;
     let rows = stmt.query_map(params![from, to], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, Option<String>>(2)?,
+            r.get::<_, Option<String>>(3)?,
+            r.get::<_, i64>(4)?,
+        ))
     })?;
     collect(rows)
 }
@@ -667,9 +742,9 @@ pub fn focus_by_group(
 ) -> Result<Vec<FocusGroupSummaryRow>, Error> {
     let mut totals: HashMap<i64, i64> = HashMap::new();
     let mut meta: HashMap<i64, (String, String)> = HashMap::new();
-    for (name, title, dur) in focus_rows(conn, from, to)? {
+    for (name, title, profile, url, dur) in focus_rows(conn, from, to)? {
         let (gid, gname, gcolor) = matcher
-            .assign(&name, &title)
+            .assign(&name, &title, profile.as_deref(), url.as_deref())
             .map(|(id, n, c)| (id, n.to_string(), c.to_string()))
             .unwrap_or_else(|| (UNGROUPED.0, UNGROUPED.1.to_string(), UNGROUPED.2.to_string()));
         meta.entry(gid).or_insert((gname, gcolor));
@@ -706,7 +781,7 @@ pub fn focus_group_timeline(
     let n = (((span + bucket - 1) / bucket) as usize).clamp(1, 5000);
 
     let mut stmt = conn.prepare(
-        "SELECT f.started_at, f.ended_at, COALESCE(w.title, '(no title)'), a.name
+        "SELECT f.started_at, f.ended_at, COALESCE(w.title, '(no title)'), a.name, f.browser_profile, f.url
          FROM focus_sessions f
          JOIN apps a ON a.id = f.app_id
          LEFT JOIN window_titles w ON w.id = f.title_id
@@ -723,13 +798,15 @@ pub fn focus_group_timeline(
             r.get::<_, i64>(1)?,
             r.get::<_, String>(2)?,
             r.get::<_, String>(3)?,
+            r.get::<_, Option<String>>(4)?,
+            r.get::<_, Option<String>>(5)?,
         ))
     })?;
 
     for row in rows {
-        let (started, ended, title, app) = row?;
+        let (started, ended, title, app, profile, url) = row?;
         let (gid, gname, gcolor) = matcher
-            .assign(&app, &title)
+            .assign(&app, &title, profile.as_deref(), url.as_deref())
             .map(|(id, n, c)| (id, n.to_string(), c.to_string()))
             .unwrap_or_else(|| (UNGROUPED.0, UNGROUPED.1.to_string(), UNGROUPED.2.to_string()));
         meta.entry(gid).or_insert((gname, gcolor));

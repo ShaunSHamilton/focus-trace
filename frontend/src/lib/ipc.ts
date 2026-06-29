@@ -4,6 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppAggregate,
+  BrowserProfileRow,
   Dashboard,
   DayFocus,
   FocusFilterOptions,
@@ -19,6 +20,7 @@ import type {
   PanelInput,
   TitleFocusRow,
   TrackingConfig,
+  UrlRow,
   WindowFocusRow,
 } from "./types";
 
@@ -54,6 +56,20 @@ export const appWindowFocus = (
 
 export const windowFocusSummary = (from: number, to: number, limit?: number) =>
   invoke<WindowFocusRow[]>("window_focus_summary", { from, to, limit });
+
+export const appBrowserProfileFocus = (
+  appId: number,
+  from: number,
+  to: number,
+  limit?: number,
+) => invoke<BrowserProfileRow[]>("app_browser_profile_focus", { appId, from, to, limit });
+
+export const appUrlFocus = (
+  appId: number,
+  from: number,
+  to: number,
+  limit?: number,
+) => invoke<UrlRow[]>("app_url_focus", { appId, from, to, limit });
 
 export const focusTimeline = (
   from: number,

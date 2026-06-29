@@ -3,6 +3,7 @@
 
 use crate::dto::LiveSnapshot;
 use crate::settings::TrackingConfig;
+use crate::telemetry::browser::BrowserProfileCache;
 use crate::telemetry::focus::FocusTracker;
 use crate::telemetry::network::NetCounters;
 use rusqlite::Connection;
@@ -14,6 +15,7 @@ pub struct Collectors {
     pub system: System,
     pub net: NetCounters,
     pub focus: FocusTracker,
+    pub browser_profiles: BrowserProfileCache,
 }
 
 pub struct AppState {

@@ -80,6 +80,16 @@ export interface TitleFocusRow {
   focusSecs: number;
 }
 
+export interface BrowserProfileRow {
+  profile: string;
+  focusSecs: number;
+}
+
+export interface UrlRow {
+  url: string;
+  focusSecs: number;
+}
+
 export interface WindowFocusRow {
   appId: number;
   name: string;
@@ -97,7 +107,7 @@ export interface FocusTimelineSeries {
 
 // ── Focus groups ────────────────────────────────────────────────────────────
 
-export type GroupField = "exe" | "title";
+export type GroupField = "exe" | "title" | "browser_profile" | "url";
 export type GroupOp = "contains" | "equals" | "regex";
 
 export interface FocusGroupRule {
@@ -127,10 +137,12 @@ export interface FocusGroupSummaryRow {
   focusSecs: number;
 }
 
-/** Known executables + titles for autocompleting group rule values. */
+/** Known executables + titles + browser profiles + URLs for autocompleting group rule values. */
 export interface FocusFilterOptions {
   exes: string[];
   titles: string[];
+  browserProfiles: string[];
+  urls: string[];
 }
 
 export interface FocusTimelinePoint {

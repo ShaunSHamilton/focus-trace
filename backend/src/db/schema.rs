@@ -9,7 +9,7 @@ PRAGMA foreign_keys = ON;";
 
 /// Ordered, idempotent migrations. Index + 1 == the `user_version` it sets.
 /// Append new entries; never edit a shipped one.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6];
 
 const V1: &str = r#"
 -- App identity: the long exe-path string is stored ONCE and referenced by FK.
@@ -157,6 +157,18 @@ CREATE TABLE IF NOT EXISTS focus_group_rules (
     sort     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_group_rules_group ON focus_group_rules(group_id);
+"#;
+
+// Browser profile column on focus sessions. Nullable; NULL for non-Chromium apps.
+const V5: &str = r#"
+ALTER TABLE focus_sessions ADD COLUMN browser_profile TEXT;
+CREATE INDEX IF NOT EXISTS idx_focus_profile ON focus_sessions(browser_profile);
+"#;
+
+// Active tab URL column on focus sessions. Nullable; only populated for Chromium browsers.
+const V6: &str = r#"
+ALTER TABLE focus_sessions ADD COLUMN url TEXT;
+CREATE INDEX IF NOT EXISTS idx_focus_url ON focus_sessions(url);
 "#;
 
 /// Apply any migrations newer than the stored `user_version`.

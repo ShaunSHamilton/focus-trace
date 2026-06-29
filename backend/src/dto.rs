@@ -110,6 +110,22 @@ pub struct TitleFocusRow {
     pub focus_secs: i64,
 }
 
+/// Focus time for a single browser profile within one Chromium app.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserProfileRow {
+    pub profile: String,
+    pub focus_secs: i64,
+}
+
+/// Focus time for a single URL within one Chromium app.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UrlRow {
+    pub url: String,
+    pub focus_secs: i64,
+}
+
 /// Focus time per window title across all apps (with the owning app).
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -185,13 +201,15 @@ pub struct FocusGroupInput {
     pub rules: Vec<FocusGroupRule>,
 }
 
-/// Distinct executables and window titles seen so far, for autocompleting rule
-/// values when building groups. Titles are capped and ranked by focus time.
+/// Distinct executables, window titles, browser profiles, and URLs seen so far, for
+/// autocompleting rule values when building groups.
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FocusFilterOptions {
     pub exes: Vec<String>,
     pub titles: Vec<String>,
+    pub browser_profiles: Vec<String>,
+    pub urls: Vec<String>,
 }
 
 /// Focus time rolled up into one group over a range. `group_id` 0 = "Ungrouped".

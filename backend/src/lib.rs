@@ -36,6 +36,8 @@ pub fn run() {
             commands::network_totals,
             commands::focus_summary,
             commands::app_window_focus,
+            commands::app_browser_profile_focus,
+            commands::app_url_focus,
             commands::window_focus_summary,
             commands::focus_timeline,
             commands::focus_by_day,
@@ -93,6 +95,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
             system,
             net: NetCounters::new(),
             focus: FocusTracker::new(),
+            browser_profiles: Default::default(),
         }),
         last_snapshot: Mutex::new(None),
         config: RwLock::new(config),
@@ -117,6 +120,13 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
 /// Background telemetry loop: collect → persist → cache → emit, once per tick.
 fn poll_loop(handle: AppHandle, poll_secs: u64) {
+    // Initialize COM for UI Automation (MTA allows CoCreateInstance on this thread).
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+
     let mut last_day = util::utc_midnight(util::now_unix());
 
     loop {
@@ -130,10 +140,15 @@ fn poll_loop(handle: AppHandle, poll_secs: u64) {
             c.system.refresh_processes(ProcessesToUpdate::All, true);
             let cfg = state.config.read().unwrap().clone();
             let apps = telemetry::process::aggregate(&c.system, &cfg);
-            let fg = telemetry::focus::foreground_window(&c.system);
+            // Two-step: get raw foreground (releases system borrow), then resolve profile.
+            let fg_raw = telemetry::focus::foreground_window(&c.system);
+            let fg: Option<telemetry::focus::Foreground> = fg_raw.map(|(exe, title, cmd, url)| {
+                let profile = telemetry::browser::extract_profile(&exe, &cmd, &mut c.browser_profiles);
+                (exe, title, profile, url)
+            });
             let finished = c.focus.update(fg.clone(), now);
             let (focused_exe, focused_title) = match fg {
-                Some((exe, title)) => (Some(exe), title),
+                Some((exe, title, _profile, _url)) => (Some(exe), title),
                 None => (None, None),
             };
             let net = telemetry::network::read_and_diff(&mut c.net);

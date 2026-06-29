@@ -7,7 +7,7 @@ import { TimeRangeSelector } from "../components/time-range-selector";
 import { useCommand } from "../hooks/use-command";
 import { COLORS } from "../lib/colors";
 import { formatBytes, formatDuration, formatPercent } from "../lib/format";
-import { appHistory } from "../lib/ipc";
+import { appBrowserProfileFocus, appHistory, appUrlFocus } from "../lib/ipc";
 import { RANGES, rangeBounds, type RangeKey } from "../lib/range";
 import type { AppAggregate } from "../lib/types";
 
@@ -18,6 +18,16 @@ export function AppDetailView({ app, onBack }: { app: AppAggregate; onBack: () =
   const { data, loading } = useCommand(() => {
     const { from, to } = rangeBounds(range.secs);
     return appHistory(app.appId, from, to, range.bucket);
+  }, [app.appId, rangeKey]);
+
+  const { data: profileData } = useCommand(() => {
+    const { from, to } = rangeBounds(range.secs);
+    return appBrowserProfileFocus(app.appId, from, to);
+  }, [app.appId, rangeKey]);
+
+  const { data: urlData } = useCommand(() => {
+    const { from, to } = rangeBounds(range.secs);
+    return appUrlFocus(app.appId, from, to);
   }, [app.appId, rangeKey]);
 
   const points = data ?? [];
@@ -68,6 +78,36 @@ export function AppDetailView({ app, onBack }: { app: AppAggregate; onBack: () =
           yFormat={formatBytes}
         />
       </Card>
+
+      {profileData && profileData.length > 0 && (
+        <Card title="Browser profiles" className="mt-4">
+          <table className="w-full text-sm">
+            <tbody>
+              {profileData.map((row) => (
+                <tr key={row.profile} className="border-b border-[#1a1a1a] last:border-0">
+                  <td className="py-1.5 text-neutral-200">{row.profile}</td>
+                  <td className="py-1.5 text-right text-neutral-400">{formatDuration(row.focusSecs)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
+      {urlData && urlData.length > 0 && (
+        <Card title="Active URLs" className="mt-4">
+          <table className="w-full text-sm">
+            <tbody>
+              {urlData.map((row) => (
+                <tr key={row.url} className="border-b border-[#1a1a1a] last:border-0">
+                  <td className="py-1.5 max-w-xs truncate text-neutral-200">{row.url}</td>
+                  <td className="py-1.5 text-right text-neutral-400">{formatDuration(row.focusSecs)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
 
       {loading && <p className="mt-3 text-xs text-neutral-500">Loading…</p>}
     </Page>

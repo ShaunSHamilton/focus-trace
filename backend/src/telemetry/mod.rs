@@ -1,3 +1,4 @@
+pub mod browser;
 pub mod focus;
 pub mod network;
 pub mod process;
@@ -34,6 +35,8 @@ pub struct NetDelta {
 pub struct FinishedFocus {
     pub exe_path: String,
     pub title: Option<String>,
+    pub browser_profile: Option<String>,
+    pub url: Option<String>,
     pub started_at: i64,
     pub ended_at: i64,
     pub duration: i64,

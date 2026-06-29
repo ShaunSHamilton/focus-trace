@@ -8,10 +8,14 @@ import type { FocusGroup, FocusGroupRule, GroupField, GroupOp } from "../lib/typ
 
 const EXE_LIST_ID = "group-opts-exes";
 const TITLE_LIST_ID = "group-opts-titles";
+const PROFILE_LIST_ID = "group-opts-profiles";
+const URL_LIST_ID = "group-opts-urls";
 
 const FIELDS: { value: GroupField; label: string }[] = [
   { value: "exe", label: "Executable" },
   { value: "title", label: "Window title" },
+  { value: "browser_profile", label: "Browser profile" },
+  { value: "url", label: "URL" },
 ];
 const OPS: { value: GroupOp; label: string }[] = [
   { value: "contains", label: "contains" },
@@ -137,6 +141,16 @@ export function GroupsView() {
           <option key={v} value={v} />
         ))}
       </datalist>
+      <datalist id={PROFILE_LIST_ID}>
+        {(options?.browserProfiles ?? []).map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
+      <datalist id={URL_LIST_ID}>
+        {(options?.urls ?? []).map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
 
       {groups.length === 0 && (
         <Card title="No groups yet">
@@ -217,8 +231,24 @@ function GroupEditor({
             />
             <input
               value={r.value}
-              list={r.field === "title" ? TITLE_LIST_ID : EXE_LIST_ID}
-              placeholder={r.field === "title" ? "e.g. — Figma" : "e.g. chrome.exe"}
+              list={
+                r.field === "title"
+                  ? TITLE_LIST_ID
+                  : r.field === "browser_profile"
+                    ? PROFILE_LIST_ID
+                    : r.field === "url"
+                      ? URL_LIST_ID
+                      : EXE_LIST_ID
+              }
+              placeholder={
+                r.field === "title"
+                  ? "e.g. Figma"
+                  : r.field === "browser_profile"
+                    ? "e.g. Work"
+                    : r.field === "url"
+                      ? "e.g. github.com"
+                      : "e.g. chrome.exe"
+              }
               onChange={(e) => setRule(i, { value: e.target.value })}
               className="flex-1 rounded-lg border border-[#262626] bg-[#0f0f0f] px-2 py-1 text-sm"
             />

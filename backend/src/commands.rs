@@ -2,9 +2,9 @@ use tauri::{AppHandle, State, Window};
 
 use crate::db::queries;
 use crate::dto::{
-    AppAggregate, Dashboard, DayFocus, FocusFilterOptions, FocusGroup, FocusGroupInput,
-    FocusGroupSummaryRow, FocusSummaryRow, FocusTimeline, LiveSnapshot, MetricPoint, NetPoint,
-    NetTotals, PanelInput, TitleFocusRow, WindowFocusRow,
+    AppAggregate, BrowserProfileRow, Dashboard, DayFocus, FocusFilterOptions, FocusGroup,
+    FocusGroupInput, FocusGroupSummaryRow, FocusSummaryRow, FocusTimeline, LiveSnapshot,
+    MetricPoint, NetPoint, NetTotals, PanelInput, TitleFocusRow, UrlRow, WindowFocusRow,
 };
 use crate::error::Error;
 use crate::focus_groups::Matcher;
@@ -95,6 +95,32 @@ pub fn app_window_focus(
 ) -> Result<Vec<TitleFocusRow>, Error> {
     let conn = state.db.lock().unwrap();
     queries::app_window_focus(&conn, app_id, from, to, limit.unwrap_or(50))
+}
+
+/// Focus time per browser profile for one Chromium app (Chrome, Edge, Brave).
+#[tauri::command]
+pub fn app_browser_profile_focus(
+    state: State<'_, AppState>,
+    app_id: i64,
+    from: i64,
+    to: i64,
+    limit: Option<i64>,
+) -> Result<Vec<BrowserProfileRow>, Error> {
+    let conn = state.db.lock().unwrap();
+    queries::app_browser_profile_focus(&conn, app_id, from, to, limit.unwrap_or(50))
+}
+
+/// Focus time per URL for one Chromium app over a range.
+#[tauri::command]
+pub fn app_url_focus(
+    state: State<'_, AppState>,
+    app_id: i64,
+    from: i64,
+    to: i64,
+    limit: Option<i64>,
+) -> Result<Vec<UrlRow>, Error> {
+    let conn = state.db.lock().unwrap();
+    queries::app_url_focus(&conn, app_id, from, to, limit.unwrap_or(50))
 }
 
 /// Top window titles across all apps over a range.

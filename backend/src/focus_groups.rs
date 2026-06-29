@@ -9,6 +9,8 @@ use regex::Regex;
 enum Field {
     Exe,
     Title,
+    BrowserProfile,
+    Url,
 }
 
 enum Pred {
@@ -46,6 +48,8 @@ impl Matcher {
                 }
                 let field = match r.field.as_str() {
                     "title" => Field::Title,
+                    "browser_profile" => Field::BrowserProfile,
+                    "url" => Field::Url,
                     _ => Field::Exe,
                 };
                 let pred = match r.op.as_str() {
@@ -68,16 +72,23 @@ impl Matcher {
         Self { groups: out }
     }
 
-    /// First group whose any rule matches `(exe, title)`. Returns
+    /// First group whose any rule matches `(exe, title, browser_profile, url)`. Returns
     /// `(group_id, name, color)`.
-    pub fn assign(&self, exe: &str, title: &str) -> Option<(i64, &str, &str)> {
+    pub fn assign(&self, exe: &str, title: &str, profile: Option<&str>, url: Option<&str>) -> Option<(i64, &str, &str)> {
         let exe_lc = exe.to_lowercase();
         let title_lc = title.to_lowercase();
+        let profile_raw = profile.unwrap_or("");
+        let profile_lc = profile_raw.to_lowercase();
+        let url_raw = url.unwrap_or("");
+        let url_lc = url_raw.to_lowercase();
+
         for g in &self.groups {
             for r in &g.rules {
-                let (raw, lc) = match r.field {
+                let (raw, lc): (&str, &str) = match r.field {
                     Field::Exe => (exe, &exe_lc),
                     Field::Title => (title, &title_lc),
+                    Field::BrowserProfile => (profile_raw, &profile_lc),
+                    Field::Url => (url_raw, &url_lc),
                 };
                 let hit = match &r.pred {
                     Pred::Contains(n) => lc.contains(n.as_str()),

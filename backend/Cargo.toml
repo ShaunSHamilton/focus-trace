@@ -34,6 +34,8 @@ windows = { version = "0.62", features = [
   "Win32_UI_WindowsAndMessaging",     # GetForegroundWindow, GetWindowThreadProcessId
   "Win32_NetworkManagement_IpHelper", # GetIfTable2, FreeMibTable, MIB_IF_TABLE2/ROW2
   "Win32_NetworkManagement_Ndis",     # NET_LUID, IF_TYPE_* / MediaConnectState
+  "Win32_UI_Accessibility",           # IUIAutomation, IValueProvider, UIA_* constants
+  "Win32_System_Com",                 # CoCreateInstance, VARIANT, CoInitializeEx
 ] }
 
 
