@@ -7,6 +7,7 @@
 ### Added
 
 - Custom dashboards
+- Custom groups
 
 ## [1.0.0]
 
