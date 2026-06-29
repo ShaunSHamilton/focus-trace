@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [1.2.0]
+
+### Added
+
+- Ability to track browser URLs
+- Group by Chromium profile
+
 ## [1.1.0]
 
 ### Added
