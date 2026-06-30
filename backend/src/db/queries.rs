@@ -704,6 +704,11 @@ pub fn focus_filter_options(conn: &Connection) -> Result<FocusFilterOptions, Err
     )?;
     let urls = collect(urls_stmt.query_map([], |r| r.get::<_, String>(0))?)?;
 
+    eprintln!(
+        "[queries::focus_filter_options] exes={} titles={} browser_profiles={} urls={}",
+        exes.len(), titles.len(), browser_profiles.len(), urls.len()
+    );
+    eprintln!("[queries::focus_filter_options] browser_profiles={browser_profiles:?}");
     Ok(FocusFilterOptions { exes, titles, browser_profiles, urls })
 }
 

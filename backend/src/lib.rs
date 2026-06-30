@@ -147,6 +147,12 @@ fn poll_loop(handle: AppHandle, poll_secs: u64) {
                 (exe, title, profile, url)
             });
             let finished = c.focus.update(fg.clone(), now);
+            if let Some(ref f) = finished {
+                eprintln!(
+                    "[poll] finished focus: exe={} profile={:?} url={:?} dur={}s",
+                    f.exe_path, f.browser_profile, f.url, f.duration
+                );
+            }
             let (focused_exe, focused_title) = match fg {
                 Some((exe, title, _profile, _url)) => (Some(exe), title),
                 None => (None, None),

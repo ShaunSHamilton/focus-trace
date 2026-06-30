@@ -29,6 +29,18 @@ fn parse_local_state(path: &PathBuf) -> Option<HashMap<String, String>> {
     Some(out)
 }
 
+/// Read `profile.last_used` (directory name) from Chrome's Local State.
+/// Chrome updates this field whenever a profile's window receives focus.
+fn read_last_used_dir(exe_name: &str) -> Option<String> {
+    let path = local_state_path(exe_name)?;
+    let contents = std::fs::read_to_string(&path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&contents).ok()?;
+    json.get("profile")?
+        .get("last_used")?
+        .as_str()
+        .map(str::to_string)
+}
+
 /// Cache of `dirname -> display_name` maps, keyed by browser exe filename.
 /// Loaded once on first access; profiles rarely change at runtime.
 #[derive(Default)]
@@ -123,8 +135,12 @@ unsafe fn find_url_edit(
     }
 }
 
-/// Extract a profile's display name from a Chromium process cmdline.
-/// Returns `None` if the exe is not a Chromium browser or has no `--profile-directory`.
+/// Determine the active profile display name for a focused Chromium browser window.
+///
+/// Chrome 2022+ runs all profiles in a single browser process, so `--profile-directory`
+/// is only present when Chrome was launched via a profile-specific shortcut. For the
+/// common case we fall back to `profile.last_used` in Chrome's Local State file, which
+/// Chrome updates whenever a profile's window receives focus.
 pub fn extract_profile(
     exe_path: &str,
     cmd: &[std::ffi::OsString],
@@ -140,17 +156,32 @@ pub fn extract_profile(
         return None;
     }
 
+    // Primary: --profile-directory flag (present when launched via profile shortcut).
     let prefix = "--profile-directory=";
-    let dir_name = cmd.iter().find_map(|arg| {
+    if let Some(dir_name) = cmd.iter().find_map(|arg| {
         arg.to_str()?.strip_prefix(prefix).map(str::to_string)
-    })?;
+    }) {
+        eprintln!("[browser::extract_profile] cmdline dir={dir_name:?}");
+        let display = resolve_dir(exe_name, &dir_name, cache);
+        eprintln!("[browser::extract_profile] -> {display:?} (cmdline)");
+        return Some(display);
+    }
 
-    // Resolve to display name; fall back to dir_name if not in cache.
-    let display = cache
-        .get_map(exe_name)
-        .and_then(|m| m.get(&dir_name))
-        .cloned()
-        .unwrap_or_else(|| dir_name.clone());
-
+    // Fallback: read profile.last_used from Local State. Chrome updates this field
+    // whenever a profile window receives focus, so it reflects the active profile.
+    let dir_name = read_last_used_dir(exe_name)?;
+    eprintln!("[browser::extract_profile] last_used dir={dir_name:?}");
+    let display = resolve_dir(exe_name, &dir_name, cache);
+    eprintln!("[browser::extract_profile] -> {display:?} (last_used)");
     Some(display)
+}
+
+/// Resolve a profile directory name (e.g. "Profile 1") to its display name
+/// (e.g. "Work") using the Local State info_cache. Falls back to the dir name.
+fn resolve_dir(exe_name: &str, dir_name: &str, cache: &mut BrowserProfileCache) -> String {
+    cache
+        .get_map(exe_name)
+        .and_then(|m| m.get(dir_name))
+        .cloned()
+        .unwrap_or_else(|| dir_name.to_string())
 }
