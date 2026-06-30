@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [1.2.1]
+
+### Fixed
+
+- Chrome 2022+ runs all profiles in a single browser process, so `--profile-directory` is absent from the cmdline unless Chrome was launched via a profile-specific shortcut. Fall back to reading `profile.last_used` from the browser's Local State file, which Chrome updates whenever a profile window receives focus.
+
 ## [1.2.0]
 
 ### Added
