@@ -113,7 +113,7 @@ export function FocusView() {
                 <span className="block truncate text-sm text-neutral-200">{t.title}</span>
                 <span className="block truncate text-[11px] text-neutral-500">{t.name}</span>
               </div>
-              <Bar fraction={t.focusSecs / titleMax} color={COLORS.accent} />
+              <Bar fraction={t.focusSecs / titleMax} color={t.color || COLORS.accent} />
               <span className="w-20 shrink-0 text-right text-sm tabular-nums text-neutral-300">
                 {formatDuration(t.focusSecs)}
               </span>

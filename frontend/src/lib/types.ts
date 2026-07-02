@@ -95,6 +95,7 @@ export interface WindowFocusRow {
   name: string;
   title: string;
   focusSecs: number;
+  color: string;
 }
 
 export interface FocusTimelineSeries {

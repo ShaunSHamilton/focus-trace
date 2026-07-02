@@ -132,7 +132,8 @@ pub fn window_focus_summary(
     limit: Option<i64>,
 ) -> Result<Vec<WindowFocusRow>, Error> {
     let conn = state.db.lock().unwrap();
-    queries::window_focus_summary(&conn, from, to, limit.unwrap_or(50))
+    let matcher = Matcher::build(&queries::list_focus_groups(&conn)?);
+    queries::window_focus_summary(&conn, &matcher, from, to, limit.unwrap_or(50))
 }
 
 /// Per-window focus split across time buckets over a range (for the timeline chart).

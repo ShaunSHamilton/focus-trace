@@ -134,6 +134,7 @@ pub struct WindowFocusRow {
     pub name: String,
     pub title: String,
     pub focus_secs: i64,
+    pub color: String,
 }
 
 // ── Focus timeline (per-window focus over time, bucketed) ─────────────────────

@@ -401,27 +401,57 @@ pub fn app_window_focus(
 /// Top window titles across all apps over a range.
 pub fn window_focus_summary(
     conn: &Connection,
+    matcher: &crate::focus_groups::Matcher,
     from: i64,
     to: i64,
     limit: i64,
 ) -> Result<Vec<WindowFocusRow>, Error> {
+    use std::collections::HashMap;
+
     let mut stmt = conn.prepare(
-        "SELECT a.id, a.name, COALESCE(w.title, '(no title)'), SUM(f.duration) AS secs
+        "SELECT a.id, a.name, COALESCE(w.title, '(no title)'), f.browser_profile, f.url, f.duration
          FROM focus_sessions f
          JOIN apps a ON a.id = f.app_id
          LEFT JOIN window_titles w ON w.id = f.title_id
-         WHERE f.started_at BETWEEN ?1 AND ?2
-         GROUP BY f.app_id, f.title_id ORDER BY secs DESC LIMIT ?3",
+         WHERE f.started_at BETWEEN ?1 AND ?2",
     )?;
-    let rows = stmt.query_map(params![from, to, limit], |r| {
-        Ok(WindowFocusRow {
-            app_id: r.get(0)?,
-            name: r.get(1)?,
-            title: r.get(2)?,
-            focus_secs: r.get(3)?,
-        })
+
+    let rows = stmt.query_map(params![from, to], |r| {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, Option<String>>(3)?,
+            r.get::<_, Option<String>>(4)?,
+            r.get::<_, i64>(5)?,
+        ))
     })?;
-    collect(rows)
+
+    // key: (app_id, title) -> (name, color, total_secs)
+    let mut map: HashMap<(i64, String), (String, String, i64)> = HashMap::new();
+    for row in rows {
+        let (app_id, name, title, profile, url, dur) = row?;
+        let color = matcher
+            .assign(&name, &title, profile.as_deref(), url.as_deref())
+            .map(|(_, _, c)| c.to_string())
+            .unwrap_or_else(|| UNGROUPED.2.to_string());
+        let entry = map.entry((app_id, title.clone())).or_insert((name, color, 0));
+        entry.2 += dur;
+    }
+
+    let mut out: Vec<WindowFocusRow> = map
+        .into_iter()
+        .map(|((app_id, title), (name, color, focus_secs))| WindowFocusRow {
+            app_id,
+            name,
+            title,
+            focus_secs,
+            color,
+        })
+        .collect();
+    out.sort_by(|a, b| b.focus_secs.cmp(&a.focus_secs));
+    out.truncate(limit as usize);
+    Ok(out)
 }
 
 /// Per-window focus split across `bucket`-second time buckets over [from, to].

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Top window titles bars now use the colour of the matched group instead of the default accent colour.
+
 ## [1.2.1]
 
 ### Fixed
